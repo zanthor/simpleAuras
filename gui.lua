@@ -772,7 +772,7 @@ function sA:EditAura(id)
 		menu:SetFrameStrata("DIALOG")
 		menu:SetFrameLevel(10)
 		menu:SetWidth(80)
-		menu:SetHeight(40)
+		menu:SetHeight(60)
 		sA:SkinFrame(menu, {0.15,0.15,0.15,1})
 		menu:Hide()
 		ed.unitButton.menu = menu
@@ -796,6 +796,7 @@ function sA:EditAura(id)
 		end
 		makeChoice("Player", 1)
 		makeChoice("Target", 2)
+		makeChoice("Raid", 3)
 	  end
 	  local menu = ed.unitButton.menu
 	  if menu:IsVisible() then menu:Hide() else menu:Show() end
@@ -1056,6 +1057,20 @@ function sA:EditAura(id)
 		ed.dual:Hide()
 		ed.dualLabel:Hide()
 		ed.showCD:Show()
+	elseif aura.unit == "Raid" then
+		ed.invert:Hide()
+		ed.invertLabel:Hide()
+		ed.dual:Hide()
+		ed.dualLabel:Hide()
+		ed.showCD:Hide()
+	else
+		ed.invert:Show()
+		ed.invertLabel:Show()
+		ed.dual:Show()
+		ed.dualLabel:Show()
+		ed.showCD:Hide()
+		ed.unitLabel:Show()
+		ed.unitButton:Show()
 	end
 
     -- Delete / Close / Copy buttons

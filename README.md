@@ -23,6 +23,10 @@
 
 /sa refresh X - Set refresh rate. (1 to 10 updates per second. Default: 5).
 
+/sa raid or /sa showraid - Show currently tracked raid targets.
+
+/sa clearraid - Clear all stored raid targets.
+
 ### SuperWoW commands:
 /sa learn X Y - manually set duration Y of spellID X.
 
@@ -74,7 +78,10 @@ Icon/Texture:
 
 
 Conditions:
-- Unit: Which unit the aura is on.
+- Unit: Which unit the aura is on. Options include:
+  - **Player**: Track auras on yourself
+  - **Target**: Track auras on your current target 
+  - **Raid**: Track auras on raid members (captures target at cast time)
 - Type: is it a buff or a debuff.
 - Low Duration Color*: If the auracolor should change at or below "lowduration"
 - Low Duration in secs*: Allways active, changes durationcolor to red if at or below, also changes color if activated.
@@ -98,6 +105,15 @@ Other:
 
 \* = For these functions to work on targets SuperWoW is REQUIRED! Also only shows your own AuraDurations.
 
+
+## New Raid Feature
+**NEW**: You can now track buffs/debuffs that you cast on raid members! 
+
+- Set Unit to "Raid" in the aura editor
+- Target a raid member and cast your spell
+- The addon will automatically remember which raid member received the spell
+- Perfect for tracking Paladin blessings, Druid marks, or any buff you cast on others
+- See `RAID_FEATURE.md` for detailed documentation
 
 ## SuperWoW Features
 If SuperWoW is installed, simpleAuras will automatically learn unkown durations of most of **your own** auras with the first cast (needs to run out to be accurate).

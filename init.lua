@@ -27,7 +27,7 @@ f:SetScript("OnEvent", function()
 end)
 
 -- runtime only
-sA = sA or { auraTimers = {}, learnCastTimers = {}, learnNew = {}, frames = {}, dualframes = {}, draggers = {} }
+sA = sA or { auraTimers = {}, learnCastTimers = {}, learnNew = {}, frames = {}, dualframes = {}, draggers = {}, raidTargets = {} }
 sA.SuperWoW = SetAutoloot and true or false
 local _, playerGUID = UnitExists("player")
 sA.playerGUID = playerGUID
@@ -148,6 +148,19 @@ if sA.SuperWoW then
 		  
 		  casterGUID = gsub(casterGUID or "", "^0x", "")
 		  if targetGUID then targetGUID = gsub(targetGUID, "^0x", "") end
+
+		  -- Store raid target information for auras that might need it
+		  if casterGUID == sA.playerGUID and targetGUID and targetGUID ~= "" then
+		    -- Find which raid member this target corresponds to
+		    for i = 1, 40 do
+		      local raidUnit = "raid" .. i
+		      local _, raidGUID = UnitExists(raidUnit)
+		      if raidGUID and gsub(raidGUID, "^0x", "") == targetGUID then
+		        sA.raidTargets[spellID] = raidUnit
+		        break
+		      end
+		    end
+		  end
 
 		  local dur = GetAuraDurationBySpellID(spellID,casterGUID)
 	  
@@ -441,10 +454,39 @@ SlashCmdList["sA"] = function(msg)
 	end
 	
 
+	-- clearraid command
+	if cmd == "clearraid" then
+		sA.raidTargets = {}
+		sA:Msg("Cleared all stored raid targets.")
+		return
+	end
+	
+	-- showraid command
+	if cmd == "showraid" or cmd == "raid" then
+		if not next(sA.raidTargets) then
+			sA:Msg("No raid targets currently stored.")
+		else
+			sA:Msg("Currently tracked raid targets:")
+			for spellID, raidUnit in pairs(sA.raidTargets) do
+				local spellName = SpellInfo(spellID)
+				local unitName = UnitName(raidUnit)
+				if unitName then
+					sA:Msg("  " .. (spellName or "Unknown") .. " (" .. spellID .. ") -> " .. unitName .. " (" .. raidUnit .. ")")
+				else
+					sA:Msg("  " .. (spellName or "Unknown") .. " (" .. spellID .. ") -> " .. raidUnit .. " (offline/not found)")
+				end
+			end
+		end
+		return
+	end
+	
+
 	-- help or unknown command fallback
 	sA:Msg("Usage:")
 	sA:Msg("/sa or /sa show or /sa hide - show/hide simpleAuras Settings.")
 	sA:Msg("/sa refresh X - set refresh rate. (1 to 10 updates per second. Default: 5).")
+	sA:Msg("/sa raid or /sa showraid - show currently tracked raid targets.")
+	sA:Msg("/sa clearraid - clear all stored raid targets.")
 	if sA.SuperWoW then
 		sA:Msg("/sa learn X Y - manually set duration Y of spellID X.")
 		sA:Msg("/sa forget X - forget AuraDuration of SpellID X (or use 'all' instead to delete all durations).")

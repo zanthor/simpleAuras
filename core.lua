@@ -84,51 +84,57 @@ end
 -------------------------------------------------
 -- SuperWoW-aware aura search
 -------------------------------------------------
-local function find_aura(name, unit, auratype, myCast)
+local function find_aura(name, unit, auratype, myCast, raidTarget)
   local found, foundstacks, foundsid, foundrem, foundtex
   local function search(is_debuff)
-    local i = (unit == "Player") and 0 or 1
+    local searchUnit = unit
+    
+    -- Handle Raid unit type
+    if unit == "Raid" and raidTarget then
+      searchUnit = raidTarget
+    end
+    
+    local i = (searchUnit == "Player") and 0 or 1
     while true do
       local tex, stacks, sid, rem
-      if unit == "Player" then
+      if searchUnit == "Player" then
         local buffType = is_debuff and "HARMFUL" or "HELPFUL"
         local bid = GetPlayerBuff(i, buffType)
         tex, stacks, sid, rem = GetPlayerBuffTexture(bid), GetPlayerBuffApplications(bid), GetPlayerBuffID(bid), GetPlayerBuffTimeLeft(bid)
       else
         if is_debuff then
-          tex, stacks, caster, sid, rem = UnitDebuff(unit, i)
+          tex, stacks, caster, sid, rem = UnitDebuff(searchUnit, i)
         else
-          tex, stacks, sid, rem = UnitBuff(unit, i)
+          tex, stacks, sid, rem = UnitBuff(searchUnit, i)
         end
-		
       end
 
       if not tex then break end
       if sid and name == SpellInfo(sid) then
-		found, foundstacks, foundsid, foundrem, foundtex = 1, stacks, sid, rem, tex
-		local _, unitGUID = UnitExists(unit)
-		if unitGUID then unitGUID = gsub(unitGUID, "^0x", "") end
-		if sA.auraTimers[unitGUID] and sA.auraTimers[unitGUID][sid] and sA.auraTimers[unitGUID][sid].castby and sA.auraTimers[unitGUID][sid].castby == sA.playerGUID
-		or (unit == "Player") then
-			return true, stacks, sid, rem, tex
-		end
+        found, foundstacks, foundsid, foundrem, foundtex = 1, stacks, sid, rem, tex
+        local _, unitGUID = UnitExists(searchUnit)
+        if unitGUID then unitGUID = gsub(unitGUID, "^0x", "") end
+        if sA.auraTimers[unitGUID] and sA.auraTimers[unitGUID][sid] and sA.auraTimers[unitGUID][sid].castby and sA.auraTimers[unitGUID][sid].castby == sA.playerGUID
+        or (searchUnit == "Player") then
+          return true, stacks, sid, rem, tex
+        end
       end
       i = i + 1
     end
-	if found == 1 and myCast == 0 then
-		return true, foundstacks, foundsid, foundrem, foundtex
-	end
+    if found == 1 and myCast == 0 then
+      return true, foundstacks, foundsid, foundrem, foundtex
+    end
     return false
   end
 
   local was_found, s, sid, rem, tex
   if auratype == "Buff" then
-	was_found, s, sid, rem, tex = search(false)
+    was_found, s, sid, rem, tex = search(false)
   else
-	was_found, s, sid, rem, tex = search(true)
-	if not was_found then
-		was_found, s, sid, rem, tex = search(false)
-	end
+    was_found, s, sid, rem, tex = search(true)
+    if not was_found then
+      was_found, s, sid, rem, tex = search(false)
+    end
   end
   
   return was_found, s, sid, rem, tex
@@ -137,18 +143,22 @@ end
 -------------------------------------------------
 -- Get Icon / Duration / Stacks (SuperWoW)
 -------------------------------------------------
-function sA:GetSuperAuraInfos(name, unit, auratype, myCast)
+function sA:GetSuperAuraInfos(name, unit, auratype, myCast, raidTarget)
   if auratype == "Cooldown" then
     local texture, remaining_time = self:GetCooldownInfo(name)
     return _, texture, remaining_time, 1
   end
 
-  local found, stacks, spellID, remaining_time, texture = find_aura(name, unit, auratype, myCast)
+  local found, stacks, spellID, remaining_time, texture = find_aura(name, unit, auratype, myCast, raidTarget)
   if not found then return end
 
   -- Fallback for missing remaining_time
   if (not remaining_time or remaining_time == 0) and spellID and sA.auraTimers then
-    local _, unitGUID = UnitExists(unit)
+    local searchUnit = unit
+    if unit == "Raid" and raidTarget then
+      searchUnit = raidTarget
+    end
+    local _, unitGUID = UnitExists(searchUnit)
     if unitGUID then
       unitGUID = gsub(unitGUID, "^0x", "")
       local timers = sA.auraTimers[unitGUID]
@@ -164,7 +174,7 @@ end
 -------------------------------------------------
 -- Tooltip-based aura info (no SuperWoW)
 -------------------------------------------------
-function sA:GetAuraInfos(auraname, unit, auratype)
+function sA:GetAuraInfos(auraname, unit, auratype, raidTarget)
   if auratype == "Cooldown" then
     local texture, remaining_time = self:GetCooldownInfo(auraname)
     return texture, remaining_time, 1
@@ -175,21 +185,21 @@ function sA:GetAuraInfos(auraname, unit, auratype)
     sAScanner:SetOwner(sAParent, "ANCHOR_NONE")
   end
 
-  local function AuraInfo(unit, index, kind)
+  local function AuraInfo(searchUnit, index, kind)
     sAScanner:ClearLines()
 
     local name, icon, duration, stacks
-    if unit == "Player" then
+    if searchUnit == "Player" then
       local buffindex = GetPlayerBuff(index - 1, (kind == "Buff") and "HELPFUL" or "HARMFUL")
       sAScanner:SetPlayerBuff(buffindex)
       icon, duration, stacks = GetPlayerBuffTexture(buffindex), GetPlayerBuffTimeLeft(buffindex), GetPlayerBuffApplications(buffindex)
     else
       if kind == "Buff" then
-        sAScanner:SetUnitBuff(unit, index)
-        icon = UnitBuff(unit, index)
+        sAScanner:SetUnitBuff(searchUnit, index)
+        icon = UnitBuff(searchUnit, index)
       else
-        sAScanner:SetUnitDebuff(unit, index)
-        icon = UnitDebuff(unit, index)
+        sAScanner:SetUnitDebuff(searchUnit, index)
+        icon = UnitDebuff(searchUnit, index)
       end
       duration = 0
     end
@@ -197,9 +207,14 @@ function sA:GetAuraInfos(auraname, unit, auratype)
     return name, icon, duration, stacks
   end
 
+  local searchUnit = unit
+  if unit == "Raid" and raidTarget then
+    searchUnit = raidTarget
+  end
+
   local i = 1
   while true do
-    local name, icon, duration, stacks = AuraInfo(unit, i, auratype)
+    local name, icon, duration, stacks = AuraInfo(searchUnit, i, auratype)
     if not name then break end
     if name == auraname then
       return icon, duration, stacks
@@ -343,15 +358,42 @@ function sA:UpdateAuras()
         show = 0 -- Default to not showing
         
         if conditionsMet then
-          -- Check for target existence if required by the aura
-          local targetCheckPassed = (aura.unit ~= "Target" or hasTarget)
+          -- Check for target/raid member existence if required by the aura
+          local targetCheckPassed = true
+          local raidTarget = nil
+          
+          if aura.unit == "Target" then
+            targetCheckPassed = hasTarget
+          elseif aura.unit == "Raid" then
+            -- For raid tracking, check if we have a stored raid target for this spell
+            if aura.name and aura.name ~= "" then
+              local spellName = aura.name
+              -- Find spell ID for this spell name to check for stored raid target
+              local testSpellID = nil
+              for spellID, raidUnit in pairs(sA.raidTargets) do
+                if SpellInfo(spellID) == spellName then
+                  if UnitExists(raidUnit) then
+                    raidTarget = raidUnit
+                    targetCheckPassed = true
+                    break
+                  end
+                end
+              end
+              -- If no stored target, we can't show the aura
+              if not raidTarget then
+                targetCheckPassed = false
+              end
+            else
+              targetCheckPassed = false
+            end
+          end
           
           if targetCheckPassed then
             -- Get aura data (icon indicates presence)
             if sA.SuperWoW then
-                spellID, icon, duration, stacks = self:GetSuperAuraInfos(aura.name, aura.unit, aura.type, aura.myCast)
+                spellID, icon, duration, stacks = self:GetSuperAuraInfos(aura.name, aura.unit, aura.type, aura.myCast, raidTarget)
             else
-                icon, duration, stacks = self:GetAuraInfos(aura.name, aura.unit, aura.type)
+                icon, duration, stacks = self:GetAuraInfos(aura.name, aura.unit, aura.type, raidTarget)
             end
             
             local auraIsPresent = icon and 1 or 0
@@ -380,11 +422,24 @@ function sA:UpdateAuras()
       if shouldShow then
         -- Get fresh aura data only if we are going to show it
         if not (icon or aura.name) then -- Data might not have been fetched in /sa mode
-		  spellID = nil
+          spellID = nil
+          local raidTarget = nil
+          
+          -- For raid tracking in editor mode, try to find a stored raid target
+          if aura.unit == "Raid" and aura.name and aura.name ~= "" then
+            local spellName = aura.name
+            for spellID_check, raidUnit in pairs(sA.raidTargets) do
+              if SpellInfo(spellID_check) == spellName and UnitExists(raidUnit) then
+                raidTarget = raidUnit
+                break
+              end
+            end
+          end
+          
           if sA.SuperWoW then
-            spellID, icon, duration, stacks = self:GetSuperAuraInfos(aura.name, aura.unit, aura.type)
+            spellID, icon, duration, stacks = self:GetSuperAuraInfos(aura.name, aura.unit, aura.type, aura.myCast, raidTarget)
           else
-            icon, duration, stacks = self:GetAuraInfos(aura.name, aura.unit, aura.type)
+            icon, duration, stacks = self:GetAuraInfos(aura.name, aura.unit, aura.type, raidTarget)
           end
         end
 
