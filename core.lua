@@ -8,6 +8,54 @@ local sAParent = CreateFrame("Frame", "sAParentFrame", UIParent)
 sAParent:SetFrameStrata("BACKGROUND")
 sAParent:SetAllPoints(UIParent)
 
+-------------------------------------------------
+-- GUID Helper is defined in init.lua (loads first)
+-------------------------------------------------
+
+-------------------------------------------------
+-- Spell ID Caching (nampower enhancement)
+-------------------------------------------------
+function sA:GetCachedSpellID(spellName)
+  if not spellName or spellName == "" then return nil end
+  
+  -- Check cache first
+  if sA.spellIDCache[spellName] then
+    return sA.spellIDCache[spellName]
+  end
+  
+  -- Use nampower if available for instant lookup
+  if sA.hasNampowerSupport then
+    local spellID = GetSpellIdForName(spellName)
+    if spellID and spellID > 0 then
+      sA.spellIDCache[spellName] = spellID
+      if sA.debugMode then
+        sA:Msg("[DEBUG] Cached spell ID for '" .. spellName .. "': " .. spellID)
+      end
+      return spellID
+    end
+  end
+  
+  -- Fallback: search spellbook (slower)
+  local i = 1
+  while true do
+    local name = GetSpellName(i, "spell")
+    if not name then break end
+    
+    if name == spellName then
+      -- Try to get spell ID from SuperWoW if available
+      if sA.SuperWoW then
+        -- We can't directly get spell ID without casting/scanning
+        -- So we cache as "found" but without ID
+        sA.spellIDCache[spellName] = -1  -- Negative to indicate found but no ID
+        return -1
+      end
+    end
+    i = i + 1
+  end
+  
+  return nil
+end
+
 function sA:ShouldAuraBeActive(aura, inCombat, inRaid, inParty)
   -- This check is now more robust and will correctly filter out new, empty auras.
   if not aura or not aura.name or aura.name == "" then return false end
@@ -57,9 +105,38 @@ function sA:ShouldAuraBeActive(aura, inCombat, inRaid, inParty)
 end
 
 -------------------------------------------------
--- Cooldown info by spell name
+-- Cooldown info by spell name (nampower enhanced)
 -------------------------------------------------
 function sA:GetCooldownInfo(spellName)
+  -- Try nampower direct lookup first (much faster)
+  if sA.hasNampowerSupport then
+    -- GetSpellSlotTypeIdForName returns: bookindex (number), booktype (string)
+    local bookindex, booktype = GetSpellSlotTypeIdForName(spellName)
+    if bookindex and booktype and bookindex > 0 then
+      -- Validate the spell exists at this slot
+      local validName = GetSpellName(bookindex, booktype)
+      if validName == spellName then
+        local start, duration, enabled = GetSpellCooldown(bookindex, booktype)
+        local texture = GetSpellTexture(bookindex, booktype)
+        
+        local remaining
+        if enabled == 1 and duration and duration > 1.5 then
+          remaining = (start + duration) - GetTime()
+          if remaining <= 0 then remaining = nil end
+        end
+        
+        if sA.debugMode then
+          sA:Msg("[DEBUG] GetCooldownInfo(nampower): " .. spellName .. " -> remaining=" .. tostring(remaining or "none"))
+        end
+        
+        return texture, remaining, 0
+      elseif sA.debugMode then
+        sA:Msg("[DEBUG] GetCooldownInfo(nampower): Invalid slot for '" .. spellName .. "' (got '" .. tostring(validName) .. "')")
+      end
+    end
+  end
+  
+  -- Fallback: linear search through spellbook
   local i = 1
   while true do
     local name = GetSpellName(i, "spell")
@@ -74,10 +151,18 @@ function sA:GetCooldownInfo(spellName)
         remaining = (start + duration) - GetTime()
         if remaining <= 0 then remaining = nil end
       end
+      
+      if sA.debugMode then
+        sA:Msg("[DEBUG] GetCooldownInfo(fallback): " .. spellName .. " -> remaining=" .. tostring(remaining or "none"))
+      end
 
       return texture, remaining, 0
     end
     i = i + 1
+  end
+  
+  if sA.debugMode then
+    sA:Msg("[DEBUG] GetCooldownInfo: Spell '" .. spellName .. "' not found in spellbook")
   end
 end
 
@@ -94,7 +179,12 @@ local function find_aura(name, unit, auratype, myCast, raidTarget)
       searchUnit = raidTarget
     end
     
+    if sA.debugMode then
+      sA:Msg("[DEBUG] find_aura: searching for '" .. name .. "' on " .. searchUnit .. " (" .. (is_debuff and "debuff" or "buff") .. ", myCast=" .. myCast .. ")")
+    end
+    
     local i = (searchUnit == "Player") and 0 or 1
+    local scanned = 0
     while true do
       local tex, stacks, sid, rem
       if searchUnit == "Player" then
@@ -109,19 +199,38 @@ local function find_aura(name, unit, auratype, myCast, raidTarget)
         end
       end
 
-      if not tex then break end
+      if not tex then 
+        if sA.debugMode then
+          sA:Msg("[DEBUG] find_aura: scanned " .. scanned .. " auras, not found")
+        end
+        break 
+      end
+      scanned = scanned + 1
+      
       if sid and name == SpellInfo(sid) then
         found, foundstacks, foundsid, foundrem, foundtex = 1, stacks, sid, rem, tex
-        local _, unitGUID = UnitExists(searchUnit)
-        if unitGUID then unitGUID = gsub(unitGUID, "^0x", "") end
+        local unitGUID = sA:GetUnitGUID(searchUnit)
+        
+        if sA.debugMode then
+          sA:Msg("[DEBUG] find_aura: FOUND spell ID " .. sid .. ", stacks=" .. (stacks or 0) .. ", rem=" .. (rem or "nil"))
+        end
+        
         if sA.auraTimers[unitGUID] and sA.auraTimers[unitGUID][sid] and sA.auraTimers[unitGUID][sid].castby and sA.auraTimers[unitGUID][sid].castby == sA.playerGUID
         or (searchUnit == "Player") then
+          if sA.debugMode then
+            sA:Msg("[DEBUG] find_aura: myCast check passed, returning aura")
+          end
           return true, stacks, sid, rem, tex
+        elseif sA.debugMode then
+          sA:Msg("[DEBUG] find_aura: found but not cast by me, continuing search")
         end
       end
       i = i + 1
     end
     if found == 1 and myCast == 0 then
+      if sA.debugMode then
+        sA:Msg("[DEBUG] find_aura: found and myCast not required, returning")
+      end
       return true, foundstacks, foundsid, foundrem, foundtex
     end
     return false
@@ -158,9 +267,8 @@ function sA:GetSuperAuraInfos(name, unit, auratype, myCast, raidTarget)
     if unit == "Raid" and raidTarget then
       searchUnit = raidTarget
     end
-    local _, unitGUID = UnitExists(searchUnit)
+    local unitGUID = sA:GetUnitGUID(searchUnit)
     if unitGUID then
-      unitGUID = gsub(unitGUID, "^0x", "")
       local timers = sA.auraTimers[unitGUID]
       if timers and timers[spellID] and timers[spellID].duration then
         local expiry = timers[spellID].duration

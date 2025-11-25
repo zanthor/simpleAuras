@@ -19,6 +19,22 @@ f:SetScript("OnEvent", function()
 		
 		sA.SettingsLoaded = 1
 		
+		-- Login message about DLL support
+		local msg = sA.PREFIX .. "Loaded. DLL Support: "
+		if sA.hasNampowerSupport then
+			msg = msg .. "|cff00ff00nampower|r "
+		end
+		if sA.SuperWoW then
+			msg = msg .. "|cff00ff00SuperWoW|r "
+		end
+		if sA.hasUnitXPSupport then
+			msg = msg .. "|cff00ff00UnitXP|r"
+		end
+		if not (sA.hasNampowerSupport or sA.SuperWoW or sA.hasUnitXPSupport) then
+			msg = msg .. "|cffff0000None|r (limited functionality)"
+		end
+		DEFAULT_CHAT_FRAME:AddMessage(msg)
+		
 		sA:CreateTestAuras()
 
 		table.insert(UISpecialFrames, "sATest")
@@ -27,11 +43,51 @@ f:SetScript("OnEvent", function()
 end)
 
 -- runtime only
-sA = sA or { auraTimers = {}, learnCastTimers = {}, learnNew = {}, frames = {}, dualframes = {}, draggers = {}, raidTargets = {} }
+sA = sA or { auraTimers = {}, learnCastTimers = {}, learnNew = {}, frames = {}, dualframes = {}, draggers = {}, raidTargets = {}, spellIDCache = {} }
 sA.SuperWoW = SetAutoloot and true or false
-local _, playerGUID = UnitExists("player")
-sA.playerGUID = playerGUID
+
+-- message helper (must be defined before VARIABLES_LOADED event uses it)
+sA.PREFIX = "|c194b7dccsimple|cffffffffAuras: "
+function sA:Msg(msg)
+  DEFAULT_CHAT_FRAME:AddMessage(self.PREFIX .. msg)
+end
+
+-- DLL detection
+sA.hasNampowerSupport = GetSpellIdForName and true or false
+sA.hasUnitXPSupport = UnitGUID and true or false
+
+-- GUID Helper (defined here because init.lua loads before core.lua)
+function sA:GetUnitGUID(unit)
+  if not unit then return nil end
+  
+  local guid
+  
+  -- Use UnitXP if available (more reliable)
+  if sA.hasUnitXPSupport then
+    guid = UnitGUID(unit)
+  end
+  
+  -- Fallback to UnitExists
+  if not guid then
+    local exists
+    exists, guid = UnitExists(unit)
+    if not exists then return nil end
+  end
+  
+  -- Ensure guid is a string and remove 0x prefix
+  if guid then
+    guid = tostring(guid)
+    guid = string.gsub(guid, "^0x", "")
+    return guid
+  end
+  
+  return nil
+end
+
+-- Initialize player GUID now that GetUnitGUID is defined
+sA.playerGUID = sA:GetUnitGUID("player")
 sA.SettingsLoaded = nil
+sA.debugMode = false
 
 -- perf: cache globals we use a lot (Lua 5.0-safe)
 local gsub   = string.gsub
@@ -41,12 +97,6 @@ local floor  = math.floor
 local tinsert = table.insert
 local getn   = table.getn
 local GetTime = GetTime
-
--- message helper
-sA.PREFIX = "|c194b7dccsimple|cffffffffAuras: "
-function sA:Msg(msg)
-  DEFAULT_CHAT_FRAME:AddMessage(self.PREFIX .. msg)
-end
 
 ---------------------------------------------------
 -- Helper Functions
@@ -64,7 +114,7 @@ end
 local function getAuraID(spellName)
     local auraFound = {}
     for auraID, aura in ipairs(simpleAuras.auras) do
-        if aura.name == spellName then
+        if aura and aura.name == spellName then
             table.insert(auraFound, auraID)
         end
     end
@@ -90,9 +140,16 @@ if sA.SuperWoW then
       local _, _, spellName  = string.find(raw, "^(.-) fades from ")
       local _, _, targetGUID = string.find(raw, "from (.-).$")
 
-      if lower(targetGUID or "") == "you" then _, targetGUID = UnitExists("player") end
-      targetGUID = gsub(targetGUID or "", "^0x", "")
-      if not spellName or targetGUID == "" then return end
+      -- targetGUID from combat log is a string, but ensure we handle it properly
+      if targetGUID and lower(targetGUID) == "you" then 
+        targetGUID = sA:GetUnitGUID("player")
+      elseif targetGUID and targetGUID ~= "" then 
+        targetGUID = gsub(tostring(targetGUID), "^0x", "")
+      else
+        targetGUID = nil
+      end
+      
+      if not spellName or not targetGUID then return end
       if not sA.auraTimers[targetGUID] then return end
 
       for spellID in pairs(sA.auraTimers[targetGUID]) do
@@ -140,31 +197,40 @@ if sA.SuperWoW then
 	  if ((auraIDs and getn(auraIDs) > 0) or simpleAuras.learnall == 1) and spellID then
 
 		  if sA.playerGUID then
+			sA.playerGUID = tostring(sA.playerGUID)
 			sA.playerGUID = gsub(sA.playerGUID, "^0x", "")
 		  else
-			local _, playerGUID = UnitExists("player")
-			sA.playerGUID = playerGUID
+			sA.playerGUID = sA:GetUnitGUID("player")
 		  end
 		  
-		  casterGUID = gsub(casterGUID or "", "^0x", "")
-		  if targetGUID then targetGUID = gsub(targetGUID, "^0x", "") end
+		  -- arg1 and arg2 from UNIT_CASTEVENT are hex numbers, convert to string
+		  casterGUID = gsub(tostring(casterGUID or ""), "^0x", "")
+		  if targetGUID then 
+		    targetGUID = gsub(tostring(targetGUID), "^0x", "")
+		  end
 
 		  -- Store raid target information for auras that might need it
-		  if casterGUID == sA.playerGUID and targetGUID and targetGUID ~= "" then
+		  if casterGUID and casterGUID == sA.playerGUID and targetGUID and targetGUID ~= "" then
 		    -- Find which raid member this target corresponds to
 		    for i = 1, 40 do
 		      local raidUnit = "raid" .. i
-		      local _, raidGUID = UnitExists(raidUnit)
-		      if raidGUID and gsub(raidGUID, "^0x", "") == targetGUID then
+		      local raidGUID = sA:GetUnitGUID(raidUnit)
+		      if raidGUID and raidGUID == targetGUID then
 		        sA.raidTargets[spellID] = raidUnit
 		        break
 		      end
 		    end
 		  end
 
+		  -- Ensure we have a valid casterGUID for comparisons
+		  if not casterGUID then return end
+		  
 		  local dur = GetAuraDurationBySpellID(spellID,casterGUID)
 	  
 		  if dur and dur > 0 and simpleAuras.updating == 0 and casterGUID == sA.playerGUID then
+		    -- Ensure targetGUID is valid
+		    if not targetGUID or targetGUID == "" then targetGUID = sA.playerGUID end
+		    
 			sA.auraTimers[targetGUID] = sA.auraTimers[targetGUID] or {}
 			sA.auraTimers[targetGUID][spellID] = sA.auraTimers[targetGUID][spellID] or {}
 			if not sA.auraTimers[targetGUID][spellID].duration or (dur + timestamp) > sA.auraTimers[targetGUID][spellID].duration then
@@ -334,6 +400,13 @@ SlashCmdList["sA"] = function(msg)
 		return
 	end
 	
+	-- debug command
+	if cmd == "debug" then
+		sA.debugMode = not sA.debugMode
+		sA:Msg("Debug mode " .. (sA.debugMode and "|cff00ff00ENABLED|r" or "|cffff0000DISABLED|r"))
+		return
+	end
+	
 	-- refresh command
 	if cmd == "refresh" then
 		local num = tonumber(val)
@@ -383,10 +456,11 @@ SlashCmdList["sA"] = function(msg)
 			local spell = tonumber(val)
 			local fade = tonumber(fad)
 			if spell and fade then
-				local _, playerGUID = UnitExists("player")
-				playerGUID = gsub(playerGUID, "^0x", "")
-				simpleAuras.auradurations[spell] = simpleAuras.auradurations[spell] or {}
-				simpleAuras.auradurations[spell][playerGUID] = fade
+				local playerGUID = sA:GetUnitGUID("player")
+				if playerGUID then
+					simpleAuras.auradurations[spell] = simpleAuras.auradurations[spell] or {}
+					simpleAuras.auradurations[spell][playerGUID] = fade
+				end
 				sA:Msg("Set Duration of "..SpellInfo(spell).."("..spell..") to " .. fade .. " seconds.")
 			else
 				sA:Msg("Usage: /sa learn X Y - manually set duration Y of spellID X.")
@@ -484,6 +558,7 @@ SlashCmdList["sA"] = function(msg)
 	-- help or unknown command fallback
 	sA:Msg("Usage:")
 	sA:Msg("/sa or /sa show or /sa hide - show/hide simpleAuras Settings.")
+	sA:Msg("/sa debug - toggle debug mode for troubleshooting aura detection.")
 	sA:Msg("/sa refresh X - set refresh rate. (1 to 10 updates per second. Default: 5).")
 	sA:Msg("/sa raid or /sa showraid - show currently tracked raid targets.")
 	sA:Msg("/sa clearraid - clear all stored raid targets.")
