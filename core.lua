@@ -167,6 +167,35 @@ function sA:GetCooldownInfo(spellName)
 end
 
 -------------------------------------------------
+-- GCD tracking using class-specific spells
+-------------------------------------------------
+function sA:IsGCDActive()
+  if not sA.hasNampowerSupport or not sA.playerGCDSpell then
+    return false
+  end
+  
+  -- Get the GCD spell for this class
+  local spellName = sA.playerGCDSpell
+  
+  -- Use nampower to get the spell cooldown
+  local bookindex, booktype = GetSpellSlotTypeIdForName(spellName)
+  if bookindex and booktype and bookindex > 0 then
+    local start, duration, enabled = GetSpellCooldown(bookindex, booktype)
+    
+    if enabled == 1 and start and duration and duration > 0 and duration <= 1.5 then
+      -- This is the GCD (typically 1.5 seconds or less)
+      local remaining = (start + duration) - GetTime()
+      if remaining > 0 then
+        sA.lastGCDEnd = start + duration
+        return true, remaining
+      end
+    end
+  end
+  
+  return false, 0
+end
+
+-------------------------------------------------
 -- SuperWoW-aware aura search
 -------------------------------------------------
 local function find_aura(name, unit, auratype, myCast, raidTarget)
@@ -465,7 +494,30 @@ function sA:UpdateAuras()
         local conditionsMet = self:ShouldAuraBeActive(aura, inCombat, inRaid, inParty)
         show = 0 -- Default to not showing
         
-        if conditionsMet then
+        -- GCD tracking: if GCD checkbox is enabled, show aura based on GCD state
+        if aura.gcd == 1 then
+          if conditionsMet then
+            local gcdActive, gcdRemaining = self:IsGCDActive()
+            
+            -- Apply invert logic for GCD
+            local shouldShowGCD = gcdActive
+            if aura.invert == 1 then
+              shouldShowGCD = not gcdActive
+            end
+            
+            if shouldShowGCD then
+              show = 1
+              -- Use the aura's configured texture, or default to a clock icon
+              icon = aura.texture or "Interface\\Icons\\INV_Misc_PocketWatch_01"
+              duration = gcdActive and gcdRemaining or 0
+              stacks = 0
+            else
+              show = 0
+            end
+          else
+            show = 0
+          end
+        elseif conditionsMet then
           -- Check for target/raid member existence if required by the aura
           local targetCheckPassed = true
           local raidTarget = nil

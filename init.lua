@@ -89,6 +89,24 @@ sA.playerGUID = sA:GetUnitGUID("player")
 sA.SettingsLoaded = nil
 sA.debugMode = false
 
+-- GCD tracking: Define GCD spell per class
+sA.GCDSpells = {
+  ROGUE = "Sinister Strike",
+  DRUID = "Mark of the Wild",
+  HUNTER = "Track Beasts",
+  PRIEST = "Power Word: Fortitude",
+  WARRIOR = "Battle Shout",
+  MAGE = "Frost Armor",
+  WARLOCK = "Demon Skin",
+  SHAMAN = "Rockbiter Weapon",
+  PALADIN = "Seal of Righteousness"
+}
+
+-- Get player class and set GCD spell
+local _, playerClass = UnitClass("player")
+sA.playerGCDSpell = sA.GCDSpells[playerClass]
+sA.lastGCDEnd = 0
+
 -- perf: cache globals we use a lot (Lua 5.0-safe)
 local gsub   = string.gsub
 local find   = string.find
