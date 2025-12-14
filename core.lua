@@ -233,7 +233,7 @@ function sA:IsGCDActive()
 end
 
 -------------------------------------------------
--- SuperWoW-aware aura search
+-- SuperWoW-aware aura search (IMPROVED with GUID support)
 -------------------------------------------------
 local function find_aura(name, unit, auratype, myCast, raidTarget)
   local found, foundstacks, foundsid, foundrem, foundtex
@@ -249,15 +249,43 @@ local function find_aura(name, unit, auratype, myCast, raidTarget)
       sA:Msg("[DEBUG] find_aura: searching for '" .. name .. "' on " .. searchUnit .. " (" .. (is_debuff and "debuff" or "buff") .. ", myCast=" .. myCast .. ")")
     end
     
+    -- IMPROVED: Try GUID-based scanning first for non-player units (more reliable like Cursive)
+    local unitGUID = nil
+    local useGUIDScan = false
+    if searchUnit ~= "Player" and sA.SuperWoW then
+      local exists
+      exists, unitGUID = UnitExists(searchUnit)
+      if exists and unitGUID then
+        -- Ensure GUID has 0x prefix for SuperWoW functions
+        if type(unitGUID) == "string" and string.sub(unitGUID, 1, 2) ~= "0x" then
+          unitGUID = "0x" .. unitGUID
+        end
+        useGUIDScan = true
+        if sA.debugMode then
+          sA:Msg("[DEBUG] find_aura: Using GUID-based scan: " .. tostring(unitGUID))
+        end
+      end
+    end
+    
+    local maxIterations = is_debuff and 64 or 64  -- Increased from default, matching Cursive/pfUI
     local i = (searchUnit == "Player") and 0 or 1
     local scanned = 0
-    while true do
-      local tex, stacks, sid, rem
+    
+    while i < maxIterations do
+      local tex, stacks, sid, rem, caster
       if searchUnit == "Player" then
         local buffType = is_debuff and "HARMFUL" or "HELPFUL"
         local bid = GetPlayerBuff(i, buffType)
         tex, stacks, sid, rem = GetPlayerBuffTexture(bid), GetPlayerBuffApplications(bid), GetPlayerBuffID(bid), GetPlayerBuffTimeLeft(bid)
+      elseif useGUIDScan then
+        -- IMPROVED: Use GUID directly (like Cursive does - more reliable)
+        if is_debuff then
+          tex, stacks, caster, sid, rem = UnitDebuff(unitGUID, i)
+        else
+          tex, stacks, caster, sid, rem = UnitBuff(unitGUID, i)
+        end
       else
+        -- Fallback: Use unit token
         if is_debuff then
           tex, stacks, caster, sid, rem = UnitDebuff(searchUnit, i)
         else
@@ -275,13 +303,18 @@ local function find_aura(name, unit, auratype, myCast, raidTarget)
       
       if sid and name == SpellInfo(sid) then
         found, foundstacks, foundsid, foundrem, foundtex = 1, stacks, sid, rem, tex
-        local unitGUID = sA:GetUnitGUID(searchUnit)
+        local checkGUID = useGUIDScan and unitGUID or sA:GetUnitGUID(searchUnit)
+        
+        -- Remove 0x prefix for internal tracking
+        if checkGUID and type(checkGUID) == "string" then
+          checkGUID = string.gsub(checkGUID, "^0x", "")
+        end
         
         if sA.debugMode then
           sA:Msg("[DEBUG] find_aura: FOUND spell ID " .. sid .. ", stacks=" .. (stacks or 0) .. ", rem=" .. (rem or "nil"))
         end
         
-        if sA.auraTimers[unitGUID] and sA.auraTimers[unitGUID][sid] and sA.auraTimers[unitGUID][sid].castby and sA.auraTimers[unitGUID][sid].castby == sA.playerGUID
+        if sA.auraTimers[checkGUID] and sA.auraTimers[checkGUID][sid] and sA.auraTimers[checkGUID][sid].castby and sA.auraTimers[checkGUID][sid].castby == sA.playerGUID
         or (searchUnit == "Player") then
           if sA.debugMode then
             sA:Msg("[DEBUG] find_aura: myCast check passed, returning aura")
@@ -316,6 +349,40 @@ local function find_aura(name, unit, auratype, myCast, raidTarget)
 end
 
 -------------------------------------------------
+-- Enhanced GUID-based spell scanning (like Cursive)
+-- Searches tracked GUIDs for a specific spell ID
+-------------------------------------------------
+local function find_spell_on_tracked_guids(spellID, is_debuff)
+  if not sA.SuperWoW or not sA.trackedGUIDs or not spellID then 
+    return nil
+  end
+  
+  local maxCheck = is_debuff and 64 or 64
+  
+  for guid, timestamp in pairs(sA.trackedGUIDs) do
+    -- Skip if GUID is too old (shouldn't happen due to cleanup, but safety check)
+    if (GetTime() - timestamp) <= 30 then
+      for i = 1, maxCheck do
+        local tex, stacks, caster, sid, rem
+        if is_debuff then
+          tex, stacks, caster, sid, rem = UnitDebuff(guid, i)
+        else
+          tex, stacks, caster, sid, rem = UnitBuff(guid, i)
+        end
+        
+        if not tex then break end
+        
+        if sid == spellID then
+          return guid, tex, stacks, sid, rem
+        end
+      end
+    end
+  end
+  
+  return nil
+end
+
+-------------------------------------------------
 -- Get Icon / Duration / Stacks (SuperWoW)
 -------------------------------------------------
 function sA:GetSuperAuraInfos(name, unit, auratype, myCast, raidTarget)
@@ -325,6 +392,42 @@ function sA:GetSuperAuraInfos(name, unit, auratype, myCast, raidTarget)
   end
 
   local found, stacks, spellID, remaining_time, texture = find_aura(name, unit, auratype, myCast, raidTarget)
+  
+  -- IMPROVED: If not found and myCast is not required, try scanning tracked GUIDs
+  -- This helps catch debuffs that might be missed due to timing issues
+  if not found and myCast == 0 and sA.SuperWoW then
+    if sA.debugMode then
+      sA:Msg("[DEBUG] Primary scan failed, trying tracked GUIDs fallback for: " .. name)
+    end
+    
+    -- Get spell ID from name if we don't have it
+    if not spellID then
+      spellID = sA:GetCachedSpellID(name)
+      if not spellID or spellID <= 0 then
+        -- Try SpellInfo lookup
+        for testID = 1, 30000 do
+          local spellName = SpellInfo(testID)
+          if spellName and spellName == name then
+            spellID = testID
+            break
+          end
+        end
+      end
+    end
+    
+    if spellID and spellID > 0 then
+      local is_debuff = (auratype ~= "Buff")
+      local foundGUID, foundTex, foundStacks, foundSID, foundRem = find_spell_on_tracked_guids(spellID, is_debuff)
+      
+      if foundGUID then
+        if sA.debugMode then
+          sA:Msg("[DEBUG] Found via tracked GUID: " .. foundGUID .. ", spellID: " .. foundSID)
+        end
+        found, texture, stacks, spellID, remaining_time = true, foundTex, foundStacks, foundSID, foundRem
+      end
+    end
+  end
+  
   if not found then return end
 
   -- Fallback for missing remaining_time

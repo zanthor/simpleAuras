@@ -379,6 +379,51 @@ sACombat:SetScript("OnEvent", function()
 end)
 
 ---------------------------------------------------
+-- GUID Tracking (like Cursive) - Improves debuff detection
+---------------------------------------------------
+if sA.SuperWoW then
+  sA.trackedGUIDs = sA.trackedGUIDs or {}
+  
+  local sAGUIDTracker = CreateFrame("Frame")
+  sAGUIDTracker:RegisterEvent("PLAYER_TARGET_CHANGED")
+  sAGUIDTracker:RegisterEvent("UNIT_COMBAT")
+  sAGUIDTracker:RegisterEvent("UNIT_MODEL_CHANGED")
+  
+  sAGUIDTracker:SetScript("OnEvent", function()
+    if event == "PLAYER_TARGET_CHANGED" then
+      local exists, guid = UnitExists("target")
+      if exists and guid and not UnitIsDead("target") then
+        -- Ensure guid has 0x prefix for consistency
+        if type(guid) == "string" and string.sub(guid, 1, 2) ~= "0x" then
+          guid = "0x" .. guid
+        end
+        sA.trackedGUIDs[guid] = GetTime()
+      end
+    elseif event == "UNIT_COMBAT" or event == "UNIT_MODEL_CHANGED" then
+      -- arg1 is the guid for these events
+      local guid = arg1
+      if guid then
+        -- Ensure guid has 0x prefix
+        if type(guid) == "string" and string.sub(guid, 1, 2) ~= "0x" then
+          guid = "0x" .. guid
+        end
+        if UnitExists(guid) and not UnitIsDead(guid) then
+          sA.trackedGUIDs[guid] = GetTime()
+        end
+      end
+    end
+    
+    -- Cleanup old GUIDs (older than 30 seconds)
+    local now = GetTime()
+    for guid, timestamp in pairs(sA.trackedGUIDs) do
+      if (now - timestamp) > 30 then
+        sA.trackedGUIDs[guid] = nil
+      end
+    end
+  end)
+end
+
+---------------------------------------------------
 -- Slash Commands
 ---------------------------------------------------
 SLASH_sA1 = "/sa"
