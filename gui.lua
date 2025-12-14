@@ -178,6 +178,31 @@ end)
 closeBtn:SetScript("OnEnter", function() closeBtn:SetBackdropColor(0.5, 0.5, 0.5, 1) end)
 closeBtn:SetScript("OnLeave", function() closeBtn:SetBackdropColor(0.2, 0.2, 0.2, 1) end)
 
+-- Create scrollframe for aura list
+if not gui.scrollFrame then
+  gui.scrollFrame = CreateFrame("ScrollFrame", nil, gui)
+  gui.scrollFrame:SetPoint("TOPLEFT", 10, -30)
+  gui.scrollFrame:SetPoint("BOTTOMRIGHT", -10, 10)
+  
+  gui.scrollContent = CreateFrame("Frame", nil, gui.scrollFrame)
+  gui.scrollContent:SetWidth(280)
+  gui.scrollContent:SetHeight(1)
+  gui.scrollFrame:SetScrollChild(gui.scrollContent)
+  
+  -- Mouse wheel support
+  gui.scrollFrame:EnableMouseWheel(true)
+  gui.scrollFrame:SetScript("OnMouseWheel", function()
+    local current = gui.scrollFrame:GetVerticalScroll()
+    local maxScroll = gui.scrollContent:GetHeight() - gui.scrollFrame:GetHeight()
+    if maxScroll < 0 then maxScroll = 0 end
+    local delta = arg1 or 0
+    local newScroll = current - (delta * 30)
+    if newScroll < 0 then newScroll = 0 end
+    if newScroll > maxScroll then newScroll = maxScroll end
+    gui.scrollFrame:SetVerticalScroll(newScroll)
+  end)
+end
+
 -- Refresh list of configured auras
 function sA:RefreshAuraList()
 
@@ -189,12 +214,16 @@ function sA:RefreshAuraList()
 
   if not simpleAuras or not simpleAuras.auras then return end
 
+  local numAuras = table.getn(simpleAuras.auras)
+  local contentHeight = numAuras * 25 + 10
+  gui.scrollContent:SetHeight(contentHeight)
+
   for i, aura in ipairs(simpleAuras.auras) do
     local id = i
-    local row = CreateFrame("Button", nil, gui)
+    local row = CreateFrame("Button", nil, gui.scrollContent)
     row:SetWidth(260)
     row:SetHeight(20)
-    row:SetPoint("TOPLEFT", 20, -30 - (id - 1) * 25)
+    row:SetPoint("TOPLEFT", 10, -5 - (id - 1) * 25)
     row:SetFrameStrata("HIGH")
     sA:SkinFrame(row, {0.2, 0.2, 0.2, 1})
 
@@ -368,6 +397,9 @@ function sA:SaveAura(id)
   if ed.gcd then
 	data.gcd             = ed.gcd.value
   end
+  if ed.dir then
+	data.dir             = ed.dir.value
+  end
   if sA.SuperWoW then
 	data.myCast          = ed.myCast.value
   end
@@ -391,6 +423,15 @@ function sA:SaveAura(id)
   data.inParty         = ed.inParty.value
   data.invert          = ed.invert.value
   data.dual            = ed.dual.value
+  
+  if sA.hasUnitXPSupport and ed.dir_left then
+    data.dir_left = ed.dir_left.value
+    data.dir_leftleft = ed.dir_leftleft.value
+    data.dir_leftleftleft = ed.dir_leftleftleft.value
+    data.dir_right = ed.dir_right.value
+    data.dir_rightright = ed.dir_rightright.value
+    data.dir_rightrightright = ed.dir_rightrightright.value
+  end
 
   ed.name:ClearFocus()
   ed.texturePath:ClearFocus()
@@ -415,7 +456,7 @@ function sA:AddAura(copyId)
   if copyId and simpleAuras.auras[copyId] then
     simpleAuras.auras[newId] = deepCopy(simpleAuras.auras[copyId])
   else
-    simpleAuras.auras[newId] = {["enabled"]=1,["myCast"]=1,["gcd"]=0,["name"]="",["auracolor"]={[1]=1,[2]=1,[3]=1,[4]=1},["autodetect"]=0,["texture"]="Interface\\Icons\\INV_Misc_QuestionMark",["scale"]=1,["xpos"]=0,["ypos"]=0,["duration"]=0,["stacks"]=0,["type"]="Buff",["unit"]="Player",["showCD"]="Always",["lowduration"]=0,["lowdurationcolor"]={[1]=1,[2]=0,[3]=0,[4]=1},["lowdurationvalue"]=5,["inCombat"]=1,["outCombat"]=1,["inParty"]=0,["inRaid"]=0,["invert"]=0,["dual"]=0}
+    simpleAuras.auras[newId] = {["enabled"]=1,["myCast"]=1,["gcd"]=0,["dir"]=0,["name"]="",["auracolor"]={[1]=1,[2]=1,[3]=1,[4]=1},["autodetect"]=0,["texture"]="Interface\\Icons\\INV_Misc_QuestionMark",["scale"]=1,["xpos"]=0,["ypos"]=0,["duration"]=0,["stacks"]=0,["type"]="Buff",["unit"]="Player",["showCD"]="Always",["lowduration"]=0,["lowdurationcolor"]={[1]=1,[2]=0,[3]=0,[4]=1},["lowdurationvalue"]=5,["inCombat"]=1,["outCombat"]=1,["inParty"]=0,["inRaid"]=0,["invert"]=0,["dual"]=0,["dir_right"]=0,["dir_rightright"]=0,["dir_rightrightright"]=0,["dir_left"]=0,["dir_leftleft"]=0,["dir_leftleftleft"]=0}
   end
   if gui.editor and gui.editor:IsShown() then
     gui.editor:Hide()
@@ -480,7 +521,7 @@ function sA:EditAura(id)
 		ed.gcd = CreateFrame("Button", nil, ed)
 		ed.gcd:SetWidth(16)
 		ed.gcd:SetHeight(16)
-		ed.gcd:SetPoint("LEFT", ed.enabledLabel, "RIGHT", 20, 0)
+		ed.gcd:SetPoint("LEFT", ed.enabledLabel, "RIGHT", 10, 0)
 		sA:SkinFrame(ed.gcd, {0.15,0.15,0.15,1})
 		ed.gcd:SetScript("OnEnter", function() ed.gcd:SetBackdropColor(0.5,0.5,0.5,1) end)
 		ed.gcd:SetScript("OnLeave", function() ed.gcd:SetBackdropColor(0.15,0.15,0.15,1) end)
@@ -492,6 +533,7 @@ function sA:EditAura(id)
 		ed.gcd.checked:SetHeight(7)
 		ed.gcd.value = 0
 		ed.gcd:SetScript("OnClick", function(self)
+		  if ed.dir and ed.dir.value == 1 then return end  -- Can't check if Dir is enabled
 		  ed.gcd.value = 1 - (ed.gcd.value or 0)
 		  if ed.gcd.value == 1 then ed.gcd.checked:Show() else ed.gcd.checked:Hide() end
 		  sA:SaveAura(id)
@@ -501,14 +543,135 @@ function sA:EditAura(id)
 		ed.gcdLabel:SetText("GCD")
 	end
 
+	-- Dir Checkbox (requires UnitXP)
+	if sA.hasUnitXPSupport then
+		ed.dir = CreateFrame("Button", nil, ed)
+		ed.dir:SetWidth(16)
+		ed.dir:SetHeight(16)
+		local gcdLabelOrEnabled = (sA.hasNampowerSupport and sA.playerGCDSpell) and ed.gcdLabel or ed.enabledLabel
+		local gcdOffset = (sA.hasNampowerSupport and sA.playerGCDSpell) and 10 or 60
+		ed.dir:SetPoint("LEFT", gcdLabelOrEnabled, "RIGHT", gcdOffset, 0)
+		sA:SkinFrame(ed.dir, {0.15,0.15,0.15,1})
+		ed.dir:SetScript("OnEnter", function() ed.dir:SetBackdropColor(0.5,0.5,0.5,1) end)
+		ed.dir:SetScript("OnLeave", function() ed.dir:SetBackdropColor(0.15,0.15,0.15,1) end)
+		ed.dir.checked = ed.dir:CreateTexture(nil, "OVERLAY")
+		ed.dir.checked:SetTexture("Interface\\Buttons\\WHITE8x8")
+		ed.dir.checked:SetVertexColor(1, 0.8, 0.06, 1)
+		ed.dir.checked:SetPoint("CENTER", ed.dir, "CENTER", 0, 0)
+		ed.dir.checked:SetWidth(7)
+		ed.dir.checked:SetHeight(7)
+		ed.dir.value = 0
+		ed.dir:SetScript("OnClick", function(self)
+		  ed.dir.value = 1 - (ed.dir.value or 0)
+		  if ed.dir.value == 1 then 
+		    ed.dir.checked:Show()
+		    -- Uncheck and disable GCD and MyCast when Dir is enabled
+		    if ed.gcd then
+		      ed.gcd.value = 0
+		      ed.gcd.checked:Hide()
+		    end
+		    if ed.myCast then
+		      ed.myCast.value = 0
+		      ed.myCast.checked:Hide()
+		    end
+		    -- Auto-check Invert and hide Invert/Dual checkboxes
+		    if ed.invert then
+		      ed.invert.value = 1
+		      ed.invert.checked:Show()
+		      ed.invert:Hide()
+		      ed.invertLabel:Hide()
+		    end
+		    if ed.dual then
+		      ed.dual.value = 0
+		      ed.dual.checked:Hide()
+		      ed.dual:Hide()
+		      ed.dualLabel:Hide()
+		    end
+		    -- Hide Type, Unit, Duration, showCD, stacks, low duration when Dir is enabled
+		    if ed.typeLabel then ed.typeLabel:Hide() end
+		    if ed.typeButton then ed.typeButton:Hide() end
+		    if ed.unitLabel then ed.unitLabel:Hide() end
+		    if ed.unitButton then ed.unitButton:Hide() end
+		    if ed.showCD then ed.showCD:Hide() end
+		    if ed.duration then ed.duration:Hide() end
+		    if ed.durationLabel then ed.durationLabel:Hide() end
+		    if ed.stacks then ed.stacks:Hide() end
+		    if ed.stacksLabel then ed.stacksLabel:Hide() end
+		    if ed.lowduration then ed.lowduration:Hide() end
+		    if ed.lowdurationLabel then ed.lowdurationLabel:Hide() end
+		    if ed.lowdurationcolorpicker then ed.lowdurationcolorpicker:Hide() end
+		    if ed.lowdurationLabelprefix then ed.lowdurationLabelprefix:Hide() end
+		    if ed.lowdurationvalue then ed.lowdurationvalue:Hide() end
+		    if ed.lowdurationLabelsuffix then ed.lowdurationLabelsuffix:Hide() end
+		    -- Show directional checkboxes
+		    if ed.dir_left then ed.dir_left:Show() end
+		    if ed.dir_left_label then ed.dir_left_label:Show() end
+		    if ed.dir_leftleft then ed.dir_leftleft:Show() end
+		    if ed.dir_leftleft_label then ed.dir_leftleft_label:Show() end
+		    if ed.dir_leftleftleft then ed.dir_leftleftleft:Show() end
+		    if ed.dir_leftleftleft_label then ed.dir_leftleftleft_label:Show() end
+		    if ed.dir_right then ed.dir_right:Show() end
+		    if ed.dir_right_label then ed.dir_right_label:Show() end
+		    if ed.dir_rightright then ed.dir_rightright:Show() end
+		    if ed.dir_rightright_label then ed.dir_rightright_label:Show() end
+		    if ed.dir_rightrightright then ed.dir_rightrightright:Show() end
+		    if ed.dir_rightrightright_label then ed.dir_rightrightright_label:Show() end
+		  else 
+		    ed.dir.checked:Hide()
+		    -- Show Type, Unit, Duration, showCD, stacks, low duration when Dir is disabled
+		    if ed.typeLabel then ed.typeLabel:Show() end
+		    if ed.typeButton then ed.typeButton:Show() end
+		    if ed.unitLabel then ed.unitLabel:Show() end
+		    if ed.unitButton then ed.unitButton:Show() end
+		    if ed.showCD then ed.showCD:Show() end
+		    if ed.duration then ed.duration:Show() end
+		    if ed.durationLabel then ed.durationLabel:Show() end
+		    if ed.stacks then ed.stacks:Show() end
+		    if ed.stacksLabel then ed.stacksLabel:Show() end
+		    if ed.lowduration then ed.lowduration:Show() end
+		    if ed.lowdurationLabel then ed.lowdurationLabel:Show() end
+		    if ed.lowdurationcolorpicker then ed.lowdurationcolorpicker:Show() end
+		    if ed.lowdurationLabelprefix then ed.lowdurationLabelprefix:Show() end
+		    if ed.lowdurationvalue then ed.lowdurationvalue:Show() end
+		    if ed.lowdurationLabelsuffix then ed.lowdurationLabelsuffix:Show() end
+		    -- Show Invert/Dual checkboxes
+		    if ed.invert then
+		      ed.invert:Show()
+		      ed.invertLabel:Show()
+		    end
+		    if ed.dual then
+		      ed.dual:Show()
+		      ed.dualLabel:Show()
+		    end
+		    -- Hide directional checkboxes
+		    if ed.dir_left then ed.dir_left:Hide() end
+		    if ed.dir_left_label then ed.dir_left_label:Hide() end
+		    if ed.dir_leftleft then ed.dir_leftleft:Hide() end
+		    if ed.dir_leftleft_label then ed.dir_leftleft_label:Hide() end
+		    if ed.dir_leftleftleft then ed.dir_leftleftleft:Hide() end
+		    if ed.dir_leftleftleft_label then ed.dir_leftleftleft_label:Hide() end
+		    if ed.dir_right then ed.dir_right:Hide() end
+		    if ed.dir_right_label then ed.dir_right_label:Hide() end
+		    if ed.dir_rightright then ed.dir_rightright:Hide() end
+		    if ed.dir_rightright_label then ed.dir_rightright_label:Hide() end
+		    if ed.dir_rightrightright then ed.dir_rightrightright:Hide() end
+		    if ed.dir_rightrightright_label then ed.dir_rightrightright_label:Hide() end
+		  end
+		  sA:SaveAura(id)
+		end)
+		ed.dirLabel = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		ed.dirLabel:SetPoint("LEFT", ed.dir, "RIGHT", 5, 0)
+		ed.dirLabel:SetText("Dir")
+	end
+
 	if sA.SuperWoW then
 		-- MyCast Checkbox
 		ed.myCast = CreateFrame("Button", nil, ed)
 		ed.myCast:SetWidth(16)
 		ed.myCast:SetHeight(16)
-		local gcdLabelOrEnabled = (sA.hasNampowerSupport and sA.playerGCDSpell) and ed.gcdLabel or ed.enabledLabel
-		local gcdOffset = (sA.hasNampowerSupport and sA.playerGCDSpell) and 40 or 95
-		ed.myCast:SetPoint("LEFT", gcdLabelOrEnabled, "RIGHT", gcdOffset, 0)
+		local dirLabelOrGcdOrEnabled = (sA.hasUnitXPSupport and ed.dirLabel) or ((sA.hasNampowerSupport and sA.playerGCDSpell) and ed.gcdLabel or ed.enabledLabel)
+		local dirOffset = (sA.hasUnitXPSupport and 10) or ((sA.hasNampowerSupport and sA.playerGCDSpell) and 10 or 60)
+		ed.myCast:SetPoint("LEFT", dirLabelOrGcdOrEnabled, "RIGHT", dirOffset, 0)
 		sA:SkinFrame(ed.myCast, {0.15,0.15,0.15,1})
 		ed.myCast:SetScript("OnEnter", function() ed.myCast:SetBackdropColor(0.5,0.5,0.5,1) end)
 		ed.myCast:SetScript("OnLeave", function() ed.myCast:SetBackdropColor(0.15,0.15,0.15,1) end)
@@ -520,6 +683,7 @@ function sA:EditAura(id)
 		ed.myCast.checked:SetHeight(7)
 		ed.myCast.value = 1
 		ed.myCast:SetScript("OnClick", function(self)
+		  if ed.dir and ed.dir.value == 1 then return end  -- Can't check if Dir is enabled
 		  ed.myCast.value = 1 - (ed.myCast.value or 0)
 		  if ed.myCast.value == 1 then ed.myCast.checked:Show() else ed.myCast.checked:Hide() end
 		  sA:SaveAura(id)
@@ -733,7 +897,7 @@ function sA:EditAura(id)
     ed.conditionsLabel:SetJustifyH("CENTER")
     ed.conditionsLabel:SetText("Conditions")
 
-    -- Type dropdown
+    -- Type dropdown (hide when Dir is enabled)
     ed.typeLabel = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	ed.typeLabel:SetPoint("TOPLEFT", linetwo, "BOTTOMLEFT", 0, -45)
     ed.typeLabel:SetText("Type:")
@@ -1033,6 +1197,168 @@ function sA:EditAura(id)
     ed.inraidLabel:SetPoint("LEFT", ed.inRaid, "RIGHT", 5, 1)
     ed.inraidLabel:SetText("In Raid")
 
+    -- Directional checkboxes (only if Dir and UnitXP are enabled)
+    -- These are positioned in the same space as Type/Unit/Duration when Dir is checked
+    if sA.hasUnitXPSupport then
+      -- < checkbox (positioned where Type label is)
+      ed.dir_left = CreateFrame("Button", nil, ed)
+      ed.dir_left:SetWidth(16)
+      ed.dir_left:SetHeight(16)
+      ed.dir_left:SetPoint("TOPLEFT", ed.typeLabel, "TOPLEFT", 0, 0)
+      sA:SkinFrame(ed.dir_left, {0.15,0.15,0.15,1})
+      ed.dir_left:SetScript("OnEnter", function() ed.dir_left:SetBackdropColor(0.5,0.5,0.5,1) end)
+      ed.dir_left:SetScript("OnLeave", function() ed.dir_left:SetBackdropColor(0.15,0.15,0.15,1) end)
+      ed.dir_left.checked = ed.dir_left:CreateTexture(nil, "OVERLAY")
+      ed.dir_left.checked:SetTexture("Interface\\Buttons\\WHITE8x8")
+      ed.dir_left.checked:SetVertexColor(1, 0.8, 0.06, 1)
+      ed.dir_left.checked:SetPoint("CENTER", ed.dir_left, "CENTER", 0, 0)
+      ed.dir_left.checked:SetWidth(7)
+      ed.dir_left.checked:SetHeight(7)
+      ed.dir_left.value = 0
+      ed.dir_left:SetScript("OnClick", function(self)
+        ed.dir_left.value = 1 - (ed.dir_left.value or 0)
+        if ed.dir_left.value == 1 then ed.dir_left.checked:Show() else ed.dir_left.checked:Hide() end
+        sA:SaveAura(id)
+      end)
+      ed.dir_left_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_left_label:SetPoint("LEFT", ed.dir_left, "RIGHT", 5, 0)
+      ed.dir_left_label:SetText("<")
+      
+      -- << checkbox
+      ed.dir_leftleft = CreateFrame("Button", nil, ed)
+      ed.dir_leftleft:SetWidth(16)
+      ed.dir_leftleft:SetHeight(16)
+      ed.dir_leftleft:SetPoint("LEFT", ed.dir_left_label, "RIGHT", 3, 0)
+      sA:SkinFrame(ed.dir_leftleft, {0.15,0.15,0.15,1})
+      ed.dir_leftleft:SetScript("OnEnter", function() ed.dir_leftleft:SetBackdropColor(0.5,0.5,0.5,1) end)
+      ed.dir_leftleft:SetScript("OnLeave", function() ed.dir_leftleft:SetBackdropColor(0.15,0.15,0.15,1) end)
+      ed.dir_leftleft.checked = ed.dir_leftleft:CreateTexture(nil, "OVERLAY")
+      ed.dir_leftleft.checked:SetTexture("Interface\\Buttons\\WHITE8x8")
+      ed.dir_leftleft.checked:SetVertexColor(1, 0.8, 0.06, 1)
+      ed.dir_leftleft.checked:SetPoint("CENTER", ed.dir_leftleft, "CENTER", 0, 0)
+      ed.dir_leftleft.checked:SetWidth(7)
+      ed.dir_leftleft.checked:SetHeight(7)
+      ed.dir_leftleft.value = 0
+      ed.dir_leftleft:SetScript("OnClick", function(self)
+        ed.dir_leftleft.value = 1 - (ed.dir_leftleft.value or 0)
+        if ed.dir_leftleft.value == 1 then ed.dir_leftleft.checked:Show() else ed.dir_leftleft.checked:Hide() end
+        sA:SaveAura(id)
+      end)
+      ed.dir_leftleft_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_leftleft_label:SetPoint("LEFT", ed.dir_leftleft, "RIGHT", 5, 0)
+      ed.dir_leftleft_label:SetText("<<")
+      
+      -- <<< checkbox
+      ed.dir_leftleftleft = CreateFrame("Button", nil, ed)
+      ed.dir_leftleftleft:SetWidth(16)
+      ed.dir_leftleftleft:SetHeight(16)
+      ed.dir_leftleftleft:SetPoint("LEFT", ed.dir_leftleft_label, "RIGHT", 3, 0)
+      sA:SkinFrame(ed.dir_leftleftleft, {0.15,0.15,0.15,1})
+      ed.dir_leftleftleft:SetScript("OnEnter", function() ed.dir_leftleftleft:SetBackdropColor(0.5,0.5,0.5,1) end)
+      ed.dir_leftleftleft:SetScript("OnLeave", function() ed.dir_leftleftleft:SetBackdropColor(0.15,0.15,0.15,1) end)
+      ed.dir_leftleftleft.checked = ed.dir_leftleftleft:CreateTexture(nil, "OVERLAY")
+      ed.dir_leftleftleft.checked:SetTexture("Interface\\Buttons\\WHITE8x8")
+      ed.dir_leftleftleft.checked:SetVertexColor(1, 0.8, 0.06, 1)
+      ed.dir_leftleftleft.checked:SetPoint("CENTER", ed.dir_leftleftleft, "CENTER", 0, 0)
+      ed.dir_leftleftleft.checked:SetWidth(7)
+      ed.dir_leftleftleft.checked:SetHeight(7)
+      ed.dir_leftleftleft.value = 0
+      ed.dir_leftleftleft:SetScript("OnClick", function(self)
+        ed.dir_leftleftleft.value = 1 - (ed.dir_leftleftleft.value or 0)
+        if ed.dir_leftleftleft.value == 1 then ed.dir_leftleftleft.checked:Show() else ed.dir_leftleftleft.checked:Hide() end
+        sA:SaveAura(id)
+      end)
+      ed.dir_leftleftleft_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_leftleftleft_label:SetPoint("LEFT", ed.dir_leftleftleft, "RIGHT", 5, 0)
+      ed.dir_leftleftleft_label:SetText("<<<")
+      
+      -- > checkbox (positioned where Unit label is, same vertical position as Type)
+      ed.dir_right = CreateFrame("Button", nil, ed)
+      ed.dir_right:SetWidth(16)
+      ed.dir_right:SetHeight(16)
+      ed.dir_right:SetPoint("TOPLEFT", ed.unitLabel, "TOPLEFT", 0, 0)
+      sA:SkinFrame(ed.dir_right, {0.15,0.15,0.15,1})
+      ed.dir_right:SetScript("OnEnter", function() ed.dir_right:SetBackdropColor(0.5,0.5,0.5,1) end)
+      ed.dir_right:SetScript("OnLeave", function() ed.dir_right:SetBackdropColor(0.15,0.15,0.15,1) end)
+      ed.dir_right.checked = ed.dir_right:CreateTexture(nil, "OVERLAY")
+      ed.dir_right.checked:SetTexture("Interface\\Buttons\\WHITE8x8")
+      ed.dir_right.checked:SetVertexColor(1, 0.8, 0.06, 1)
+      ed.dir_right.checked:SetPoint("CENTER", ed.dir_right, "CENTER", 0, 0)
+      ed.dir_right.checked:SetWidth(7)
+      ed.dir_right.checked:SetHeight(7)
+      ed.dir_right.value = 0
+      ed.dir_right:SetScript("OnClick", function(self)
+        ed.dir_right.value = 1 - (ed.dir_right.value or 0)
+        if ed.dir_right.value == 1 then ed.dir_right.checked:Show() else ed.dir_right.checked:Hide() end
+        sA:SaveAura(id)
+      end)
+      ed.dir_right_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_right_label:SetPoint("LEFT", ed.dir_right, "RIGHT", 5, 0)
+      ed.dir_right_label:SetText(">")
+      
+      -- >> checkbox
+      ed.dir_rightright = CreateFrame("Button", nil, ed)
+      ed.dir_rightright:SetWidth(16)
+      ed.dir_rightright:SetHeight(16)
+      ed.dir_rightright:SetPoint("LEFT", ed.dir_right_label, "RIGHT", 3, 0)
+      sA:SkinFrame(ed.dir_rightright, {0.15,0.15,0.15,1})
+      ed.dir_rightright:SetScript("OnEnter", function() ed.dir_rightright:SetBackdropColor(0.5,0.5,0.5,1) end)
+      ed.dir_rightright:SetScript("OnLeave", function() ed.dir_rightright:SetBackdropColor(0.15,0.15,0.15,1) end)
+      ed.dir_rightright.checked = ed.dir_rightright:CreateTexture(nil, "OVERLAY")
+      ed.dir_rightright.checked:SetTexture("Interface\\Buttons\\WHITE8x8")
+      ed.dir_rightright.checked:SetVertexColor(1, 0.8, 0.06, 1)
+      ed.dir_rightright.checked:SetPoint("CENTER", ed.dir_rightright, "CENTER", 0, 0)
+      ed.dir_rightright.checked:SetWidth(7)
+      ed.dir_rightright.checked:SetHeight(7)
+      ed.dir_rightright.value = 0
+      ed.dir_rightright:SetScript("OnClick", function(self)
+        ed.dir_rightright.value = 1 - (ed.dir_rightright.value or 0)
+        if ed.dir_rightright.value == 1 then ed.dir_rightright.checked:Show() else ed.dir_rightright.checked:Hide() end
+        sA:SaveAura(id)
+      end)
+      ed.dir_rightright_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_rightright_label:SetPoint("LEFT", ed.dir_rightright, "RIGHT", 5, 0)
+      ed.dir_rightright_label:SetText(">>")
+      
+      -- >>> checkbox
+      ed.dir_rightrightright = CreateFrame("Button", nil, ed)
+      ed.dir_rightrightright:SetWidth(16)
+      ed.dir_rightrightright:SetHeight(16)
+      ed.dir_rightrightright:SetPoint("LEFT", ed.dir_rightright_label, "RIGHT", 3, 0)
+      sA:SkinFrame(ed.dir_rightrightright, {0.15,0.15,0.15,1})
+      ed.dir_rightrightright:SetScript("OnEnter", function() ed.dir_rightrightright:SetBackdropColor(0.5,0.5,0.5,1) end)
+      ed.dir_rightrightright:SetScript("OnLeave", function() ed.dir_rightrightright:SetBackdropColor(0.15,0.15,0.15,1) end)
+      ed.dir_rightrightright.checked = ed.dir_rightrightright:CreateTexture(nil, "OVERLAY")
+      ed.dir_rightrightright.checked:SetTexture("Interface\\Buttons\\WHITE8x8")
+      ed.dir_rightrightright.checked:SetVertexColor(1, 0.8, 0.06, 1)
+      ed.dir_rightrightright.checked:SetPoint("CENTER", ed.dir_rightrightright, "CENTER", 0, 0)
+      ed.dir_rightrightright.checked:SetWidth(7)
+      ed.dir_rightrightright.checked:SetHeight(7)
+      ed.dir_rightrightright.value = 0
+      ed.dir_rightrightright:SetScript("OnClick", function(self)
+        ed.dir_rightrightright.value = 1 - (ed.dir_rightrightright.value or 0)
+        if ed.dir_rightrightright.value == 1 then ed.dir_rightrightright.checked:Show() else ed.dir_rightrightright.checked:Hide() end
+        sA:SaveAura(id)
+      end)
+      ed.dir_rightrightright_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_rightrightright_label:SetPoint("LEFT", ed.dir_rightrightright, "RIGHT", 5, 0)
+      ed.dir_rightrightright_label:SetText(">>>")
+      
+      -- Hide directional checkboxes by default (they'll be shown when Dir is checked)
+      ed.dir_left:Hide()
+      ed.dir_left_label:Hide()
+      ed.dir_leftleft:Hide()
+      ed.dir_leftleft_label:Hide()
+      ed.dir_leftleftleft:Hide()
+      ed.dir_leftleftleft_label:Hide()
+      ed.dir_right:Hide()
+      ed.dir_right_label:Hide()
+      ed.dir_rightright:Hide()
+      ed.dir_rightright_label:Hide()
+      ed.dir_rightrightright:Hide()
+      ed.dir_rightrightright_label:Hide()
+    end
+
     -- Invert / Dual
     ed.invert = CreateFrame("Button", nil, ed)
     ed.invert:SetWidth(16)
@@ -1161,6 +1487,10 @@ function sA:EditAura(id)
 	  ed.gcd.value = aura.gcd or 0
 	  if ed.gcd.value == 1 then ed.gcd.checked:Show() else ed.gcd.checked:Hide() end
   end
+  if ed.dir then
+	  ed.dir.value = aura.dir or 0
+	  if ed.dir.value == 1 then ed.dir.checked:Show() else ed.dir.checked:Hide() end
+  end
   if ed.myCast then
 	  ed.myCast.value = aura.myCast or 0
 	  if ed.myCast.value == 1 then ed.myCast.checked:Show() else ed.myCast.checked:Hide() end
@@ -1205,6 +1535,59 @@ function sA:EditAura(id)
   if ed.inRaid.value == 1 then ed.inRaid.checked:Show() else ed.inRaid.checked:Hide() end
   ed.inParty.value = aura.inParty or 0
   if ed.inParty.value == 1 then ed.inParty.checked:Show() else ed.inParty.checked:Hide() end
+  
+  if sA.hasUnitXPSupport and ed.dir_left then
+    ed.dir_left.value = aura.dir_left or 0
+    if ed.dir_left.value == 1 then ed.dir_left.checked:Show() else ed.dir_left.checked:Hide() end
+    ed.dir_leftleft.value = aura.dir_leftleft or 0
+    if ed.dir_leftleft.value == 1 then ed.dir_leftleft.checked:Show() else ed.dir_leftleft.checked:Hide() end
+    ed.dir_leftleftleft.value = aura.dir_leftleftleft or 0
+    if ed.dir_leftleftleft.value == 1 then ed.dir_leftleftleft.checked:Show() else ed.dir_leftleftleft.checked:Hide() end
+    ed.dir_right.value = aura.dir_right or 0
+    if ed.dir_right.value == 1 then ed.dir_right.checked:Show() else ed.dir_right.checked:Hide() end
+    ed.dir_rightright.value = aura.dir_rightright or 0
+    if ed.dir_rightright.value == 1 then ed.dir_rightright.checked:Show() else ed.dir_rightright.checked:Hide() end
+    ed.dir_rightrightright.value = aura.dir_rightrightright or 0
+    if ed.dir_rightrightright.value == 1 then ed.dir_rightrightright.checked:Show() else ed.dir_rightrightright.checked:Hide() end
+    
+    -- Hide/show elements based on dir state
+    if aura.dir == 1 then
+      if ed.typeLabel then ed.typeLabel:Hide() end
+      if ed.typeButton then ed.typeButton:Hide() end
+      if ed.unitLabel then ed.unitLabel:Hide() end
+      if ed.unitButton then ed.unitButton:Hide() end
+      if ed.showCD then ed.showCD:Hide() end
+      if ed.duration then ed.duration:Hide() end
+      if ed.durationLabel then ed.durationLabel:Hide() end
+      if ed.stacks then ed.stacks:Hide() end
+      if ed.stacksLabel then ed.stacksLabel:Hide() end
+      if ed.lowduration then ed.lowduration:Hide() end
+      if ed.lowdurationLabel then ed.lowdurationLabel:Hide() end
+      if ed.lowdurationcolorpicker then ed.lowdurationcolorpicker:Hide() end
+      if ed.lowdurationLabelprefix then ed.lowdurationLabelprefix:Hide() end
+      if ed.lowdurationvalue then ed.lowdurationvalue:Hide() end
+      if ed.lowdurationLabelsuffix then ed.lowdurationLabelsuffix:Hide() end
+      -- Hide Invert/Dual when Dir is enabled
+      if ed.invert then ed.invert:Hide() end
+      if ed.invertLabel then ed.invertLabel:Hide() end
+      if ed.dual then ed.dual:Hide() end
+      if ed.dualLabel then ed.dualLabel:Hide() end
+      -- Show directional checkboxes when Dir is enabled
+      if ed.dir_left then ed.dir_left:Show() end
+      if ed.dir_left_label then ed.dir_left_label:Show() end
+      if ed.dir_leftleft then ed.dir_leftleft:Show() end
+      if ed.dir_leftleft_label then ed.dir_leftleft_label:Show() end
+      if ed.dir_leftleftleft then ed.dir_leftleftleft:Show() end
+      if ed.dir_leftleftleft_label then ed.dir_leftleftleft_label:Show() end
+      if ed.dir_right then ed.dir_right:Show() end
+      if ed.dir_right_label then ed.dir_right_label:Show() end
+      if ed.dir_rightright then ed.dir_rightright:Show() end
+      if ed.dir_rightright_label then ed.dir_rightright_label:Show() end
+      if ed.dir_rightrightright then ed.dir_rightrightright:Show() end
+      if ed.dir_rightrightright_label then ed.dir_rightrightright_label:Show() end
+    end
+  end
+  
   ed.invert.value = aura.invert or 0
   if ed.invert.value == 1 then ed.invert.checked:Show() else ed.invert.checked:Hide() end
   ed.dual.value = aura.dual or 0
@@ -1403,7 +1786,7 @@ function sA:EditAura(id)
     scroll:SetPoint("TOPLEFT", 10, -30)
     scroll:SetPoint("BOTTOMRIGHT", -10, 40)
     local content = CreateFrame("Frame", nil, scroll)
-    local total = 246
+    local total = 247
     local numPerRow = 6
     local size = 36
     local padding = 4

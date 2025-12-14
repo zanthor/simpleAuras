@@ -100,8 +100,45 @@ function sA:ShouldAuraBeActive(aura, inCombat, inRaid, inParty)
       end
   end
 
-  -- Final Decision: Both categories of conditions must be met.
-  return combatStateOK and groupStateOK
+  -- Part 3: Evaluate Directional requirement (if Dir is enabled)
+  local directionOK = true
+  if aura.dir == 1 then
+    -- If Dir mode is enabled but no target exists, direction check fails
+    if not (sA.hasUnitXPSupport and UnitExists("target")) then
+      directionOK = false
+    else
+      local anyDirSet = aura.dir_left == 1 or aura.dir_leftleft == 1 or aura.dir_leftleftleft == 1 or
+                        aura.dir_right == 1 or aura.dir_rightright == 1 or aura.dir_rightrightright == 1
+      
+      if anyDirSet then
+        local angle = UnitXP("relativeDirection", "player", "target")
+        if angle then
+          local absAngle = math.abs(angle)
+          directionOK = false  -- Start false, set true if any condition matches (OR logic)
+          
+          -- Check each direction (OR conditions)
+          if absAngle >= 120 and absAngle <= 180 then
+            -- Behind
+            if angle < 0 and aura.dir_rightrightright == 1 then directionOK = true end
+            if angle > 0 and aura.dir_leftleftleft == 1 then directionOK = true end
+          elseif absAngle >= 90 and absAngle < 120 then
+            -- Back-side
+            if angle < 0 and aura.dir_rightright == 1 then directionOK = true end
+            if angle > 0 and aura.dir_leftleft == 1 then directionOK = true end
+          elseif absAngle >= 30 and absAngle < 90 then
+            -- Side
+            if angle < 0 and aura.dir_right == 1 then directionOK = true end
+            if angle > 0 and aura.dir_left == 1 then directionOK = true end
+          end
+        else
+          directionOK = false  -- Can't get angle
+        end
+      end
+    end
+  end
+
+  -- Final Decision: All categories of conditions must be met.
+  return combatStateOK and groupStateOK and directionOK
 end
 
 -------------------------------------------------
@@ -499,9 +536,9 @@ function sA:UpdateAuras()
           if conditionsMet then
             local gcdActive, gcdRemaining = self:IsGCDActive()
             
-            -- Apply invert logic for GCD
+            -- Apply invert logic for GCD (but not for Dir mode)
             local shouldShowGCD = gcdActive
-            if aura.invert == 1 then
+            if aura.invert == 1 and aura.dir ~= 1 then
               shouldShowGCD = not gcdActive
             end
             
@@ -549,23 +586,31 @@ function sA:UpdateAuras()
           end
           
           if targetCheckPassed then
-            -- Get aura data (icon indicates presence)
-            if sA.SuperWoW then
-                spellID, icon, duration, stacks = self:GetSuperAuraInfos(aura.name, aura.unit, aura.type, aura.myCast, raidTarget)
+            -- Dir mode: just show the texture, no aura lookup needed
+            if aura.dir == 1 then
+              show = 1
+              icon = aura.texture
+              duration = 0
+              stacks = 0
             else
-                icon, duration, stacks = self:GetAuraInfos(aura.name, aura.unit, aura.type, raidTarget)
-            end
-            
-            local auraIsPresent = icon and 1 or 0
-            
-            -- Apply inversion logic
-            if aura.type == "Cooldown" then
-              local onCooldown = duration and duration > 0
-              show = (((aura.showCD == "No CD" or aura.showCD == "Always") and not onCooldown) or ((aura.showCD == "CD" or aura.showCD == "Always") and onCooldown)) and 1 or 0
-            elseif aura.invert == 1 then
-              show = 1 - auraIsPresent
-            else
-              show = auraIsPresent
+              -- Get aura data (icon indicates presence)
+              if sA.SuperWoW then
+                  spellID, icon, duration, stacks = self:GetSuperAuraInfos(aura.name, aura.unit, aura.type, aura.myCast, raidTarget)
+              else
+                  icon, duration, stacks = self:GetAuraInfos(aura.name, aura.unit, aura.type, raidTarget)
+              end
+              
+              local auraIsPresent = icon and 1 or 0
+              
+              -- Apply inversion logic
+              if aura.type == "Cooldown" then
+                local onCooldown = duration and duration > 0
+                show = (((aura.showCD == "No CD" or aura.showCD == "Always") and not onCooldown) or ((aura.showCD == "CD" or aura.showCD == "Always") and onCooldown)) and 1 or 0
+              elseif aura.invert == 1 then
+                show = 1 - auraIsPresent
+              else
+                show = auraIsPresent
+              end
             end
           end
         end

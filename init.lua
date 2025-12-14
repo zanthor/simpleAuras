@@ -54,7 +54,7 @@ end
 
 -- DLL detection
 sA.hasNampowerSupport = GetSpellIdForName and true or false
-sA.hasUnitXPSupport = UnitGUID and true or false
+sA.hasUnitXPSupport = UnitXP and pcall(UnitXP, "inSight", "player", "player") or false
 
 -- GUID Helper (defined here because init.lua loads before core.lua)
 function sA:GetUnitGUID(unit)
@@ -62,17 +62,10 @@ function sA:GetUnitGUID(unit)
   
   local guid
   
-  -- Use UnitXP if available (more reliable)
-  if sA.hasUnitXPSupport then
-    guid = UnitGUID(unit)
-  end
-  
-  -- Fallback to UnitExists
-  if not guid then
-    local exists
-    exists, guid = UnitExists(unit)
-    if not exists then return nil end
-  end
+  -- Try UnitExists which returns exists, guid
+  local exists
+  exists, guid = UnitExists(unit)
+  if not exists then return nil end
   
   -- Ensure guid is a string and remove 0x prefix
   if guid then
