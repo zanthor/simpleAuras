@@ -1816,8 +1816,8 @@ function sA:EditAura(id)
       btn:SetPoint("TOPLEFT", col * (size + padding) + 22, -row * (size + padding))
       local tex = btn:CreateTexture(nil, "ARTWORK")
       tex:SetAllPoints(btn)
-      tex:SetTexture("Interface\\AddOns\\simpleAuras\\Auras\\SAura" .. i)
-      btn.texturePath = "Interface\\AddOns\\simpleAuras\\Auras\\SAura" .. i
+      tex:SetTexture("Interface\\AddOns\\simpleAuras\\Auras\\Aura" .. i)
+      btn.texturePath = "Interface\\AddOns\\simpleAuras\\Auras\\Aura" .. i
       btn:SetScript("OnClick", function(self)
         selectedTexture = btn.texturePath
         for _, child in ipairs({content:GetChildren()}) do
