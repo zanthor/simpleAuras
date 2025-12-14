@@ -1786,7 +1786,7 @@ function sA:EditAura(id)
     scroll:SetPoint("TOPLEFT", 10, -30)
     scroll:SetPoint("BOTTOMRIGHT", -10, 40)
     local content = CreateFrame("Frame", nil, scroll)
-    local total = 247
+    local total = 298
     local numPerRow = 6
     local size = 36
     local padding = 4
