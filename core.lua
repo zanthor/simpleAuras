@@ -103,15 +103,45 @@ function sA:ShouldAuraBeActive(aura, inCombat, inRaid, inParty)
   -- Part 3: Evaluate Directional requirement (if Dir is enabled)
   local directionOK = true
   if aura.dir == 1 then
-    -- If Dir mode is enabled but no target exists, direction check fails
-    if not (sA.hasUnitXPSupport and UnitExists("target")) then
+    -- Determine which unit to check based on dir_unit setting
+    local targetUnit = "target"
+    if aura.dir_unit == "Pet" then
+      targetUnit = "pet"
+    end
+    
+    -- If Dir mode is enabled but the specified unit doesn't exist, direction check fails
+    if not (sA.hasUnitXPSupport and UnitExists(targetUnit)) then
       directionOK = false
     else
+      -- Check range conditions (> min and/or < max)
+      local minRange = aura.dir_minrange or 0
+      local maxRange = aura.dir_maxrange or 0
+      local rangeOK = true
+      
+      if minRange > 0 or maxRange > 0 then
+        local distance = UnitXP("distanceBetween", "player", targetUnit)
+        if distance then
+          if minRange > 0 and maxRange > 0 then
+            -- Both set: must be in window (> min AND < max)
+            rangeOK = (distance > minRange and distance < maxRange)
+          elseif minRange > 0 then
+            -- Only min set: must be greater than min
+            rangeOK = (distance > minRange)
+          elseif maxRange > 0 then
+            -- Only max set: must be less than max
+            rangeOK = (distance < maxRange)
+          end
+        else
+          rangeOK = false  -- Can't get distance
+        end
+      end
+      
+      -- Check directional angles
       local anyDirSet = aura.dir_left == 1 or aura.dir_leftleft == 1 or aura.dir_leftleftleft == 1 or
                         aura.dir_right == 1 or aura.dir_rightright == 1 or aura.dir_rightrightright == 1
       
       if anyDirSet then
-        local angle = UnitXP("relativeDirection", "player", "target")
+        local angle = UnitXP("relativeDirection", "player", targetUnit)
         if angle then
           local absAngle = math.abs(angle)
           directionOK = false  -- Start false, set true if any condition matches (OR logic)
@@ -134,10 +164,16 @@ function sA:ShouldAuraBeActive(aura, inCombat, inRaid, inParty)
           directionOK = false  -- Can't get angle
         end
       end
+      
+      -- Both range and direction must pass
+      directionOK = directionOK and rangeOK
     end
   end
 
   -- Final Decision: All categories of conditions must be met.
+  if sA.debugMode and aura.name and string.find(aura.name, "Judgement") then
+    sA:Msg("[DEBUG] ShouldAuraBeActive('" .. aura.name .. "'): combatStateOK=" .. tostring(combatStateOK) .. ", groupStateOK=" .. tostring(groupStateOK) .. ", directionOK=" .. tostring(directionOK))
+  end
   return combatStateOK and groupStateOK and directionOK
 end
 
@@ -163,7 +199,6 @@ function sA:GetCooldownInfo(spellName)
         end
         
         if sA.debugMode then
-          sA:Msg("[DEBUG] GetCooldownInfo(nampower): " .. spellName .. " -> remaining=" .. tostring(remaining or "none"))
         end
         
         return texture, remaining, 0
@@ -190,7 +225,6 @@ function sA:GetCooldownInfo(spellName)
       end
       
       if sA.debugMode then
-        sA:Msg("[DEBUG] GetCooldownInfo(fallback): " .. spellName .. " -> remaining=" .. tostring(remaining or "none"))
       end
 
       return texture, remaining, 0
@@ -198,9 +232,7 @@ function sA:GetCooldownInfo(spellName)
     i = i + 1
   end
   
-  if sA.debugMode then
-    sA:Msg("[DEBUG] GetCooldownInfo: Spell '" .. spellName .. "' not found in spellbook")
-  end
+
 end
 
 -------------------------------------------------
@@ -237,6 +269,11 @@ end
 -------------------------------------------------
 local function find_aura(name, unit, auratype, myCast, raidTarget)
   local found, foundstacks, foundsid, foundrem, foundtex
+  
+  if sA.debugMode and name and string.find(name, "Judgement") then
+    sA:Msg("[DEBUG] find_aura called: name='" .. name .. "', unit=" .. unit .. ", auratype=" .. auratype .. ", myCast=" .. tostring(myCast))
+  end
+  
   local function search(is_debuff)
     local searchUnit = unit
     
@@ -245,29 +282,25 @@ local function find_aura(name, unit, auratype, myCast, raidTarget)
       searchUnit = raidTarget
     end
     
-    if sA.debugMode then
-      sA:Msg("[DEBUG] find_aura: searching for '" .. name .. "' on " .. searchUnit .. " (" .. (is_debuff and "debuff" or "buff") .. ", myCast=" .. myCast .. ")")
+    if sA.debugMode and name and string.find(name, "Judgement") then
+      sA:Msg("[DEBUG] find_aura: searching for '" .. name .. "' on " .. searchUnit .. " (" .. (is_debuff and "debuff" or "buff") .. ", myCast=" .. tostring(myCast) .. ")")
     end
     
-    -- IMPROVED: Try GUID-based scanning first for non-player units (more reliable like Cursive)
+    -- Get GUID for SuperWoW scanning (more reliable than unit tokens)
     local unitGUID = nil
     local useGUIDScan = false
     if searchUnit ~= "Player" and sA.SuperWoW then
       local exists
       exists, unitGUID = UnitExists(searchUnit)
       if exists and unitGUID then
-        -- Ensure GUID has 0x prefix for SuperWoW functions
-        if type(unitGUID) == "string" and string.sub(unitGUID, 1, 2) ~= "0x" then
-          unitGUID = "0x" .. unitGUID
-        end
         useGUIDScan = true
         if sA.debugMode then
-          sA:Msg("[DEBUG] find_aura: Using GUID-based scan: " .. tostring(unitGUID))
+          sA:Msg("[DEBUG] find_aura: Using GUID scan: " .. tostring(unitGUID))
         end
       end
     end
     
-    local maxIterations = is_debuff and 64 or 64  -- Increased from default, matching Cursive/pfUI
+    local maxIterations = is_debuff and 64 or 64
     local i = (searchUnit == "Player") and 0 or 1
     local scanned = 0
     
@@ -278,60 +311,92 @@ local function find_aura(name, unit, auratype, myCast, raidTarget)
         local bid = GetPlayerBuff(i, buffType)
         tex, stacks, sid, rem = GetPlayerBuffTexture(bid), GetPlayerBuffApplications(bid), GetPlayerBuffID(bid), GetPlayerBuffTimeLeft(bid)
       elseif useGUIDScan then
-        -- IMPROVED: Use GUID directly (like Cursive does - more reliable)
+        -- SuperWoW: Use GUID directly (like Cursive does)
         if is_debuff then
           tex, stacks, caster, sid, rem = UnitDebuff(unitGUID, i)
         else
           tex, stacks, caster, sid, rem = UnitBuff(unitGUID, i)
         end
       else
-        -- Fallback: Use unit token
+        -- Fallback: Use unit token if GUID not available
         if is_debuff then
           tex, stacks, caster, sid, rem = UnitDebuff(searchUnit, i)
         else
-          tex, stacks, sid, rem = UnitBuff(searchUnit, i)
+          tex, stacks, caster, sid, rem = UnitBuff(searchUnit, i)
         end
       end
 
       if not tex then 
-        if sA.debugMode then
-          sA:Msg("[DEBUG] find_aura: scanned " .. scanned .. " auras, not found")
+        if sA.debugMode and name and string.find(name, "Judgement") then
+          sA:Msg("[DEBUG] find_aura: scanned " .. scanned .. " auras on " .. searchUnit .. ", '" .. name .. "' not found")
         end
         break 
       end
       scanned = scanned + 1
       
       if sid and name == SpellInfo(sid) then
-        found, foundstacks, foundsid, foundrem, foundtex = 1, stacks, sid, rem, tex
-        local checkGUID = useGUIDScan and unitGUID or sA:GetUnitGUID(searchUnit)
-        
-        -- Remove 0x prefix for internal tracking
-        if checkGUID and type(checkGUID) == "string" then
-          checkGUID = string.gsub(checkGUID, "^0x", "")
+        if sA.debugMode and name and string.find(name, "Judgement") then
+          sA:Msg("[DEBUG] find_aura: [" .. i .. "] MATCH! sid=" .. sid .. " name=" .. (SpellInfo(sid) or "nil"))
+        end
+        if sA.debugMode and name and string.find(name, "Judgement") then
+          sA:Msg("[DEBUG] find_aura: FOUND spell '" .. name .. "' ID " .. sid .. ", stacks=" .. (stacks or 0) .. ", caster=" .. tostring(caster))
         end
         
-        if sA.debugMode then
-          sA:Msg("[DEBUG] find_aura: FOUND spell ID " .. sid .. ", stacks=" .. (stacks or 0) .. ", rem=" .. (rem or "nil"))
-        end
-        
-        if sA.auraTimers[checkGUID] and sA.auraTimers[checkGUID][sid] and sA.auraTimers[checkGUID][sid].castby and sA.auraTimers[checkGUID][sid].castby == sA.playerGUID
-        or (searchUnit == "Player") then
-          if sA.debugMode then
-            sA:Msg("[DEBUG] find_aura: myCast check passed, returning aura")
+        -- Check myCast requirement
+        if myCast == 1 then
+          -- Need to verify this was cast by player
+          local isMine = false
+          
+          -- For player unit, always consider it mine
+          if searchUnit == "Player" then
+            isMine = true
+          -- Check if caster GUID matches player (SuperWoW provides caster from UnitDebuff/UnitBuff)
+          elseif caster then
+            -- Ensure we have playerGUID
+            if not sA.playerGUID then
+              sA.playerGUID = sA:GetUnitGUID("player")
+            end
+            
+            -- Normalize both GUIDs (remove 0x prefix for comparison)
+            if sA.playerGUID then
+              local casterGUID = tostring(caster)
+              casterGUID = string.gsub(casterGUID, "^0x", "")
+              local playerGUID = string.gsub(tostring(sA.playerGUID), "^0x", "")
+              
+              isMine = (casterGUID == playerGUID)
+              
+              if sA.debugMode and name and string.find(name, "Judgement") then
+                if isMine then
+                  sA:Msg("[DEBUG] find_aura: caster match! caster=" .. casterGUID .. " player=" .. playerGUID)
+                else
+                  sA:Msg("[DEBUG] find_aura: caster mismatch - caster=" .. casterGUID .. " player=" .. playerGUID)
+                end
+              end
+            end
+          end
+          
+          if isMine then
+            if sA.debugMode and name and string.find(name, "Judgement") then
+              sA:Msg("[DEBUG] find_aura: myCast check passed, returning aura")
+            end
+            return true, stacks, sid, rem, tex
+          else
+            if sA.debugMode and name and string.find(name, "Judgement") then
+              sA:Msg("[DEBUG] find_aura: found but not cast by me, continuing search")
+            end
+          end
+        else
+          -- myCast not required, return immediately
+          if sA.debugMode and name and string.find(name, "Judgement") then
+            sA:Msg("[DEBUG] find_aura: myCast not required, returning aura")
           end
           return true, stacks, sid, rem, tex
-        elseif sA.debugMode then
-          sA:Msg("[DEBUG] find_aura: found but not cast by me, continuing search")
         end
       end
       i = i + 1
     end
-    if found == 1 and myCast == 0 then
-      if sA.debugMode then
-        sA:Msg("[DEBUG] find_aura: found and myCast not required, returning")
-      end
-      return true, foundstacks, foundsid, foundrem, foundtex
-    end
+    
+    -- If we scanned everything and found nothing that matched
     return false
   end
 
@@ -386,6 +451,10 @@ end
 -- Get Icon / Duration / Stacks (SuperWoW)
 -------------------------------------------------
 function sA:GetSuperAuraInfos(name, unit, auratype, myCast, raidTarget)
+  if sA.debugMode and name and string.find(name, "Judgement") then
+    sA:Msg("[DEBUG] GetSuperAuraInfos called: name='" .. name .. "', unit=" .. unit .. ", auratype=" .. auratype .. ", myCast=" .. tostring(myCast))
+  end
+  
   if auratype == "Cooldown" then
     local texture, remaining_time = self:GetCooldownInfo(name)
     return _, texture, remaining_time, 1
@@ -610,6 +679,10 @@ function sA:UpdateAuras()
     -- Add a guard clause to skip invalid/empty auras completely.
     -- This prevents errors when a new, unconfigured aura exists.
     if aura and aura.name then
+      if sA.debugMode and string.find(aura.name, "Judgement") then
+        sA:Msg("[DEBUG] Processing aura [" .. id .. "]: '" .. aura.name .. "' (type=" .. (aura.type or "nil") .. ", unit=" .. (aura.unit or "nil") .. ", enabled=" .. tostring(aura.enabled) .. ")")
+      end
+      
       local show, icon, duration, stacks
       local currentDuration, currentStacks, currentDurationtext, spellID = 600, 20, "", nil
 
@@ -632,6 +705,11 @@ function sA:UpdateAuras()
 	  
         -- SCENARIO 1: NORMAL GAMEPLAY MODE
         local conditionsMet = self:ShouldAuraBeActive(aura, inCombat, inRaid, inParty)
+        
+        if sA.debugMode and aura.name and string.find(aura.name, "Judgement") then
+          sA:Msg("[DEBUG] Aura '" .. aura.name .. "' conditionsMet=" .. tostring(conditionsMet) .. " (inCombat=" .. tostring(inCombat) .. ", hasTarget=" .. tostring(hasTarget) .. ")")
+        end
+        
         show = 0 -- Default to not showing
         
         -- GCD tracking: if GCD checkbox is enabled, show aura based on GCD state
@@ -689,6 +767,10 @@ function sA:UpdateAuras()
           end
           
           if targetCheckPassed then
+            if sA.debugMode and aura.name and string.find(aura.name, "Judgement") then
+              sA:Msg("[DEBUG] Condition check: aura.name='" .. aura.name .. "', unit=" .. aura.unit .. ", type=" .. aura.type .. ", dir=" .. tostring(aura.dir))
+            end
+            
             -- Dir mode: just show the texture, no aura lookup needed
             if aura.dir == 1 then
               show = 1
@@ -792,12 +874,47 @@ function sA:UpdateAuras()
         frame:SetWidth(48 * scale)
   	    frame:SetHeight(48 * scale)
         frame.texture:SetTexture(aura.texture)
+        -- Check range for Dir mode (if enabled)
+        local useRangeColor = false
+        local currentRange = nil
+        if aura.dir == 1 and aura.dir_showrange == 1 and sA.hasUnitXPSupport then
+          local targetUnit = "target"
+          if aura.dir_unit == "Pet" then
+            -- Measure distance from player to pet
+            targetUnit = "pet"
+          elseif aura.dir_unit == "Target" then
+            -- Measure distance from player to target
+            targetUnit = "target"
+          end
+          
+          -- Get distance from player to target unit
+          if UnitExists(targetUnit) then
+            local distance = UnitXP("distanceBetween", "player", targetUnit)
+            if distance then
+              currentRange = floor(distance + 0.5)
+              local rangeThreshold = aura.dir_rangevalue or 0
+              if rangeThreshold > 0 and distance >= rangeThreshold then
+                useRangeColor = true
+              end
+            end
+          end
+        end
+        
         frame.durationtext:SetText((aura.duration == 1 and (sA.SuperWoW or aura.unit == "Player" or aura.type == "Cooldown")) and currentDurationtext or "")
-        frame.stackstext:SetText((aura.stacks == 1) and currentStacks or "")
+        frame.stackstext:SetText((aura.dir == 1 and aura.dir_showrange == 1 and currentRange) and currentRange or (aura.stacks == 1) and currentStacks or "")
         if aura.duration == 1 then frame.durationtext:SetFont(FONT, 20 * textscale, "OUTLINE") end
-        if aura.stacks   == 1 then frame.stackstext:SetFont(FONT, 14 * scale, "OUTLINE") end
+        if aura.stacks   == 1 or (aura.dir == 1 and aura.dir_showrange == 1) then frame.stackstext:SetFont(FONT, 14 * scale, "OUTLINE") end
+        
+        -- Apply range text offsets for Dir auras (default to center)
+        if aura.dir == 1 and aura.dir_showrange == 1 then
+          local xOffset = (aura.dir_rangetext_xoffset or 0)
+          local yOffset = (aura.dir_rangetext_yoffset or 0)
+          frame.stackstext:ClearAllPoints()
+          frame.stackstext:SetPoint("CENTER", frame, "CENTER", xOffset, yOffset)
+        end
 
-        local color = (aura.lowduration == 1 and currentDuration and currentDuration <= aura.lowdurationvalue)
+        local color = useRangeColor and (aura.dir_rangecolor or {1, 0, 0, 1})
+          or (aura.dir ~= 1 and aura.lowduration == 1 and currentDuration and currentDuration <= aura.lowdurationvalue)
           and (aura.lowdurationcolor or {1, 0, 0, 1})
           or  (aura.auracolor or {1, 1, 1, 1})
 

@@ -431,6 +431,30 @@ function sA:SaveAura(id)
     data.dir_right = ed.dir_right.value
     data.dir_rightright = ed.dir_rightright.value
     data.dir_rightrightright = ed.dir_rightrightright.value
+    if ed.dir_showrange then
+      data.dir_showrange = ed.dir_showrange.value
+    end
+    if ed.dir_unit then
+      data.dir_unit = ed.dir_unit.text:GetText()
+    end
+    if ed.dir_rangevalue then
+      data.dir_rangevalue = tonumber(ed.dir_rangevalue:GetText()) or 0
+    end
+    if ed.dir_rangecolorpicker then
+      data.dir_rangecolor = {ed.dir_rangecolorpicker.r, ed.dir_rangecolorpicker.g, ed.dir_rangecolorpicker.b, ed.dir_rangecolorpicker.a}
+    end
+    if ed.dir_rangetext_xoffset then
+      data.dir_rangetext_xoffset = tonumber(ed.dir_rangetext_xoffset:GetText()) or 0
+    end
+    if ed.dir_rangetext_yoffset then
+      data.dir_rangetext_yoffset = tonumber(ed.dir_rangetext_yoffset:GetText()) or 0
+    end
+    if ed.dir_minrange then
+      data.dir_minrange = tonumber(ed.dir_minrange:GetText()) or 0
+    end
+    if ed.dir_maxrange then
+      data.dir_maxrange = tonumber(ed.dir_maxrange:GetText()) or 0
+    end
   end
 
   ed.name:ClearFocus()
@@ -456,7 +480,7 @@ function sA:AddAura(copyId)
   if copyId and simpleAuras.auras[copyId] then
     simpleAuras.auras[newId] = deepCopy(simpleAuras.auras[copyId])
   else
-    simpleAuras.auras[newId] = {["enabled"]=1,["myCast"]=1,["gcd"]=0,["dir"]=0,["name"]="",["auracolor"]={[1]=1,[2]=1,[3]=1,[4]=1},["autodetect"]=0,["texture"]="Interface\\Icons\\INV_Misc_QuestionMark",["scale"]=1,["xpos"]=0,["ypos"]=0,["duration"]=0,["stacks"]=0,["type"]="Buff",["unit"]="Player",["showCD"]="Always",["lowduration"]=0,["lowdurationcolor"]={[1]=1,[2]=0,[3]=0,[4]=1},["lowdurationvalue"]=5,["inCombat"]=1,["outCombat"]=1,["inParty"]=0,["inRaid"]=0,["invert"]=0,["dual"]=0,["dir_right"]=0,["dir_rightright"]=0,["dir_rightrightright"]=0,["dir_left"]=0,["dir_leftleft"]=0,["dir_leftleftleft"]=0}
+    simpleAuras.auras[newId] = {["enabled"]=1,["myCast"]=1,["gcd"]=0,["dir"]=0,["name"]="",["auracolor"]={[1]=1,[2]=1,[3]=1,[4]=1},["autodetect"]=0,["texture"]="Interface\\Icons\\INV_Misc_QuestionMark",["scale"]=1,["xpos"]=0,["ypos"]=0,["duration"]=0,["stacks"]=0,["type"]="Buff",["unit"]="Player",["showCD"]="Always",["lowduration"]=0,["lowdurationcolor"]={[1]=1,[2]=0,[3]=0,[4]=1},["lowdurationvalue"]=5,["inCombat"]=1,["outCombat"]=1,["inParty"]=0,["inRaid"]=0,["invert"]=0,["dual"]=0,["dir_right"]=0,["dir_rightright"]=0,["dir_rightrightright"]=0,["dir_left"]=0,["dir_leftleft"]=0,["dir_leftleftleft"]=0,["dir_showrange"]=0,["dir_unit"]="Target",["dir_rangevalue"]=0,["dir_rangecolor"]={[1]=1,[2]=0,[3]=0,[4]=1},["dir_rangetext_xoffset"]=0,["dir_rangetext_yoffset"]=0,["dir_minrange"]=0,["dir_maxrange"]=0}
   end
   if gui.editor and gui.editor:IsShown() then
     gui.editor:Hide()
@@ -616,6 +640,19 @@ function sA:EditAura(id)
 		    if ed.dir_rightright_label then ed.dir_rightright_label:Show() end
 		    if ed.dir_rightrightright then ed.dir_rightrightright:Show() end
 		    if ed.dir_rightrightright_label then ed.dir_rightrightright_label:Show() end
+		    -- Show range controls
+		    if ed.dir_showrange then ed.dir_showrange:Show() end
+		    if ed.dir_showrange_label then ed.dir_showrange_label:Show() end
+		    if ed.dir_unit then ed.dir_unit:Show() end
+		    if ed.dir_unit_label then ed.dir_unit_label:Show() end
+		    if ed.dir_rangevalue then ed.dir_rangevalue:Show() end
+		    if ed.dir_rangevalue_label then ed.dir_rangevalue_label:Show() end
+		    if ed.dir_rangecolorpicker then ed.dir_rangecolorpicker:Show() end
+		    if ed.dir_rangecolor_label then ed.dir_rangecolor_label:Show() end
+		    if ed.dir_rangetext_xoffset then ed.dir_rangetext_xoffset:Show() end
+		    if ed.dir_rangetext_xoffset_label then ed.dir_rangetext_xoffset_label:Show() end
+		    if ed.dir_rangetext_yoffset then ed.dir_rangetext_yoffset:Show() end
+		    if ed.dir_rangetext_yoffset_label then ed.dir_rangetext_yoffset_label:Show() end
 		  else 
 		    ed.dir.checked:Hide()
 		    -- Show Type, Unit, Duration, showCD, stacks, low duration when Dir is disabled
@@ -656,6 +693,19 @@ function sA:EditAura(id)
 		    if ed.dir_rightright_label then ed.dir_rightright_label:Hide() end
 		    if ed.dir_rightrightright then ed.dir_rightrightright:Hide() end
 		    if ed.dir_rightrightright_label then ed.dir_rightrightright_label:Hide() end
+		    -- Hide range controls
+		    if ed.dir_showrange then ed.dir_showrange:Hide() end
+		    if ed.dir_showrange_label then ed.dir_showrange_label:Hide() end
+		    if ed.dir_unit then ed.dir_unit:Hide() end
+		    if ed.dir_unit_label then ed.dir_unit_label:Hide() end
+		    if ed.dir_rangevalue then ed.dir_rangevalue:Hide() end
+		    if ed.dir_rangevalue_label then ed.dir_rangevalue_label:Hide() end
+		    if ed.dir_rangecolorpicker then ed.dir_rangecolorpicker:Hide() end
+		    if ed.dir_rangecolor_label then ed.dir_rangecolor_label:Hide() end
+		    if ed.dir_rangetext_xoffset then ed.dir_rangetext_xoffset:Hide() end
+		    if ed.dir_rangetext_xoffset_label then ed.dir_rangetext_xoffset_label:Hide() end
+		    if ed.dir_rangetext_yoffset then ed.dir_rangetext_yoffset:Hide() end
+		    if ed.dir_rangetext_yoffset_label then ed.dir_rangetext_yoffset_label:Hide() end
 		  end
 		  sA:SaveAura(id)
 		end)
@@ -1198,13 +1248,93 @@ function sA:EditAura(id)
     ed.inraidLabel:SetText("In Raid")
 
     -- Directional checkboxes (only if Dir and UnitXP are enabled)
-    -- These are positioned in the same space as Type/Unit/Duration when Dir is checked
+    -- These are positioned closer to Conditions header
     if sA.hasUnitXPSupport then
-      -- < checkbox (positioned where Type label is)
+      -- Unit dropdown (Target/Pet) - CREATE FIRST so others can anchor to it
+      ed.dir_unit_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_unit_label:SetPoint("TOP", ed.conditionsLabel, "BOTTOM", -120, -10)
+      ed.dir_unit_label:SetText("Unit:")
+      ed.dir_unit = CreateFrame("Button", nil, ed)
+      ed.dir_unit:SetWidth(55)
+      ed.dir_unit:SetHeight(20)
+      ed.dir_unit:SetPoint("LEFT", ed.dir_unit_label, "RIGHT", 3, 0)
+      sA:SkinFrame(ed.dir_unit, {0.2,0.2,0.2,1})
+      ed.dir_unit.text = ed.dir_unit:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_unit.text:SetPoint("CENTER", ed.dir_unit, "CENTER", 0, 0)
+      ed.dir_unit:SetScript("OnEnter", function() ed.dir_unit:SetBackdropColor(0.5,0.5,0.5,1) end)
+      ed.dir_unit:SetScript("OnLeave", function() ed.dir_unit:SetBackdropColor(0.2,0.2,0.2,1) end)
+      ed.dir_unit:SetScript("OnClick", function(self)
+        if not ed.dir_unit.menu then
+          local menu = CreateFrame("Frame", nil, ed)
+          menu:SetPoint("TOPLEFT", ed.dir_unit, "BOTTOMLEFT", 0, -2)
+          menu:SetFrameStrata("DIALOG")
+          menu:SetFrameLevel(10)
+          menu:SetWidth(60)
+          menu:SetHeight(40)
+          sA:SkinFrame(menu, {0.15,0.15,0.15,1})
+          menu:Hide()
+          ed.dir_unit.menu = menu
+          local function makeChoice(text, index)
+            local b = CreateFrame("Button", nil, menu)
+            b:SetWidth(60)
+            b:SetHeight(20)
+            b:SetPoint("TOPLEFT", menu, "TOPLEFT", 0, -((index - 1) * 20))
+            sA:SkinFrame(b, {0.2,0.2,0.2,1})
+            b.text = b:CreateFontString(nil, "OVERLAY", "GameFontWhite")
+            b.text:SetPoint("CENTER", b, "CENTER", 0, 0)
+            b.text:SetText(text)
+            b:SetScript("OnEnter", function() b:SetBackdropColor(0.5,0.5,0.5,1) end)
+            b:SetScript("OnLeave", function() b:SetBackdropColor(0.2,0.2,0.2,1) end)
+            b:SetScript("OnClick", function()
+              ed.dir_unit.text:SetText(text)
+              menu:Hide()
+              sA:SaveAura(id)
+            end)
+          end
+          makeChoice("Target", 1)
+          makeChoice("Pet", 2)
+        end
+        local menu = ed.dir_unit.menu
+        if menu:IsVisible() then menu:Hide() else menu:Show() end
+      end)
+      
+      -- Min range (>) editbox
+      ed.dir_minrange_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_minrange_label:SetPoint("LEFT", ed.dir_unit, "RIGHT", 8, 0)
+      ed.dir_minrange_label:SetText(">")
+      ed.dir_minrange = CreateFrame("EditBox", nil, ed)
+      ed.dir_minrange:SetWidth(30)
+      ed.dir_minrange:SetHeight(20)
+      ed.dir_minrange:SetPoint("LEFT", ed.dir_minrange_label, "RIGHT", 3, 0)
+      ed.dir_minrange:SetAutoFocus(false)
+      ed.dir_minrange:SetFontObject("GameFontHighlight")
+      sA:SkinFrame(ed.dir_minrange, {0.15,0.15,0.15,1})
+      ed.dir_minrange:SetScript("OnEscapePressed", function() ed.dir_minrange:ClearFocus() end)
+      ed.dir_minrange:SetScript("OnEnterPressed", function() sA:SaveAura(id); ed.dir_minrange:ClearFocus() end)
+      ed.dir_minrange:SetScript("OnEditFocusGained", function() ed.dir_minrange:SetBackdropColor(0.25,0.25,0.25,1) end)
+      ed.dir_minrange:SetScript("OnEditFocusLost", function() ed.dir_minrange:SetBackdropColor(0.15,0.15,0.15,1) end)
+      
+      -- Max range (<) editbox
+      ed.dir_maxrange_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_maxrange_label:SetPoint("LEFT", ed.dir_minrange, "RIGHT", 8, 0)
+      ed.dir_maxrange_label:SetText("<")
+      ed.dir_maxrange = CreateFrame("EditBox", nil, ed)
+      ed.dir_maxrange:SetWidth(30)
+      ed.dir_maxrange:SetHeight(20)
+      ed.dir_maxrange:SetPoint("LEFT", ed.dir_maxrange_label, "RIGHT", 3, 0)
+      ed.dir_maxrange:SetAutoFocus(false)
+      ed.dir_maxrange:SetFontObject("GameFontHighlight")
+      sA:SkinFrame(ed.dir_maxrange, {0.15,0.15,0.15,1})
+      ed.dir_maxrange:SetScript("OnEscapePressed", function() ed.dir_maxrange:ClearFocus() end)
+      ed.dir_maxrange:SetScript("OnEnterPressed", function() sA:SaveAura(id); ed.dir_maxrange:ClearFocus() end)
+      ed.dir_maxrange:SetScript("OnEditFocusGained", function() ed.dir_maxrange:SetBackdropColor(0.25,0.25,0.25,1) end)
+      ed.dir_maxrange:SetScript("OnEditFocusLost", function() ed.dir_maxrange:SetBackdropColor(0.15,0.15,0.15,1) end)
+      
+      -- < checkbox
       ed.dir_left = CreateFrame("Button", nil, ed)
       ed.dir_left:SetWidth(16)
       ed.dir_left:SetHeight(16)
-      ed.dir_left:SetPoint("TOPLEFT", ed.typeLabel, "TOPLEFT", 0, 0)
+      ed.dir_left:SetPoint("TOPLEFT", ed.dir_unit_label, "BOTTOMLEFT", 0, -8)
       sA:SkinFrame(ed.dir_left, {0.15,0.15,0.15,1})
       ed.dir_left:SetScript("OnEnter", function() ed.dir_left:SetBackdropColor(0.5,0.5,0.5,1) end)
       ed.dir_left:SetScript("OnLeave", function() ed.dir_left:SetBackdropColor(0.15,0.15,0.15,1) end)
@@ -1272,11 +1402,11 @@ function sA:EditAura(id)
       ed.dir_leftleftleft_label:SetPoint("LEFT", ed.dir_leftleftleft, "RIGHT", 5, 0)
       ed.dir_leftleftleft_label:SetText("<<<")
       
-      -- > checkbox (positioned where Unit label is, same vertical position as Type)
+      -- > checkbox (positioned on same row as left arrows, with spacing)
       ed.dir_right = CreateFrame("Button", nil, ed)
       ed.dir_right:SetWidth(16)
       ed.dir_right:SetHeight(16)
-      ed.dir_right:SetPoint("TOPLEFT", ed.unitLabel, "TOPLEFT", 0, 0)
+      ed.dir_right:SetPoint("LEFT", ed.dir_leftleftleft_label, "RIGHT", 10, 0)
       sA:SkinFrame(ed.dir_right, {0.15,0.15,0.15,1})
       ed.dir_right:SetScript("OnEnter", function() ed.dir_right:SetBackdropColor(0.5,0.5,0.5,1) end)
       ed.dir_right:SetScript("OnLeave", function() ed.dir_right:SetBackdropColor(0.15,0.15,0.15,1) end)
@@ -1344,6 +1474,120 @@ function sA:EditAura(id)
       ed.dir_rightrightright_label:SetPoint("LEFT", ed.dir_rightrightright, "RIGHT", 5, 0)
       ed.dir_rightrightright_label:SetText(">>>")
       
+      -- Show Range checkbox (positioned on third row below directional checkboxes, left-aligned)
+      ed.dir_showrange = CreateFrame("Button", nil, ed)
+      ed.dir_showrange:SetWidth(16)
+      ed.dir_showrange:SetHeight(16)
+      ed.dir_showrange:SetPoint("TOPLEFT", ed.dir_left, "BOTTOMLEFT", 0, -8)
+      sA:SkinFrame(ed.dir_showrange, {0.15,0.15,0.15,1})
+      ed.dir_showrange:SetScript("OnEnter", function() ed.dir_showrange:SetBackdropColor(0.5,0.5,0.5,1) end)
+      ed.dir_showrange:SetScript("OnLeave", function() ed.dir_showrange:SetBackdropColor(0.15,0.15,0.15,1) end)
+      ed.dir_showrange.checked = ed.dir_showrange:CreateTexture(nil, "OVERLAY")
+      ed.dir_showrange.checked:SetTexture("Interface\\Buttons\\WHITE8x8")
+      ed.dir_showrange.checked:SetVertexColor(1, 0.8, 0.06, 1)
+      ed.dir_showrange.checked:SetPoint("CENTER", ed.dir_showrange, "CENTER", 0, 0)
+      ed.dir_showrange.checked:SetWidth(7)
+      ed.dir_showrange.checked:SetHeight(7)
+      ed.dir_showrange.value = 0
+      ed.dir_showrange:SetScript("OnClick", function(self)
+        ed.dir_showrange.value = 1 - (ed.dir_showrange.value or 0)
+        if ed.dir_showrange.value == 1 then ed.dir_showrange.checked:Show() else ed.dir_showrange.checked:Hide() end
+        sA:SaveAura(id)
+      end)
+      ed.dir_showrange_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_showrange_label:SetPoint("LEFT", ed.dir_showrange, "RIGHT", 5, 0)
+      ed.dir_showrange_label:SetText("Range")
+      
+      -- Range text X offset - positioned on third row
+      ed.dir_rangetext_xoffset_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_rangetext_xoffset_label:SetPoint("LEFT", ed.dir_showrange_label, "RIGHT", 8, 0)
+      ed.dir_rangetext_xoffset_label:SetText("X:")
+      ed.dir_rangetext_xoffset = CreateFrame("EditBox", nil, ed)
+      ed.dir_rangetext_xoffset:SetWidth(30)
+      ed.dir_rangetext_xoffset:SetHeight(20)
+      ed.dir_rangetext_xoffset:SetPoint("LEFT", ed.dir_rangetext_xoffset_label, "RIGHT", 3, 0)
+      ed.dir_rangetext_xoffset:SetAutoFocus(false)
+      ed.dir_rangetext_xoffset:SetFontObject("GameFontHighlight")
+      sA:SkinFrame(ed.dir_rangetext_xoffset, {0.15,0.15,0.15,1})
+      ed.dir_rangetext_xoffset:SetScript("OnEscapePressed", function() ed.dir_rangetext_xoffset:ClearFocus() end)
+      ed.dir_rangetext_xoffset:SetScript("OnEnterPressed", function() sA:SaveAura(id); ed.dir_rangetext_xoffset:ClearFocus() end)
+      ed.dir_rangetext_xoffset:SetScript("OnEditFocusGained", function() ed.dir_rangetext_xoffset:SetBackdropColor(0.25,0.25,0.25,1) end)
+      ed.dir_rangetext_xoffset:SetScript("OnEditFocusLost", function() ed.dir_rangetext_xoffset:SetBackdropColor(0.15,0.15,0.15,1) end)
+      
+      -- Range text Y offset
+      ed.dir_rangetext_yoffset_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_rangetext_yoffset_label:SetPoint("LEFT", ed.dir_rangetext_xoffset, "RIGHT", 8, 0)
+      ed.dir_rangetext_yoffset_label:SetText("Y:")
+      ed.dir_rangetext_yoffset = CreateFrame("EditBox", nil, ed)
+      ed.dir_rangetext_yoffset:SetWidth(30)
+      ed.dir_rangetext_yoffset:SetHeight(20)
+      ed.dir_rangetext_yoffset:SetPoint("LEFT", ed.dir_rangetext_yoffset_label, "RIGHT", 3, 0)
+      ed.dir_rangetext_yoffset:SetAutoFocus(false)
+      ed.dir_rangetext_yoffset:SetFontObject("GameFontHighlight")
+      sA:SkinFrame(ed.dir_rangetext_yoffset, {0.15,0.15,0.15,1})
+      ed.dir_rangetext_yoffset:SetScript("OnEscapePressed", function() ed.dir_rangetext_yoffset:ClearFocus() end)
+      ed.dir_rangetext_yoffset:SetScript("OnEnterPressed", function() sA:SaveAura(id); ed.dir_rangetext_yoffset:ClearFocus() end)
+      ed.dir_rangetext_yoffset:SetScript("OnEditFocusGained", function() ed.dir_rangetext_yoffset:SetBackdropColor(0.25,0.25,0.25,1) end)
+      ed.dir_rangetext_yoffset:SetScript("OnEditFocusLost", function() ed.dir_rangetext_yoffset:SetBackdropColor(0.15,0.15,0.15,1) end)
+      
+      -- Range value editbox and color picker - positioned on third row to the right of Y offset
+      ed.dir_rangevalue_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_rangevalue_label:SetPoint("LEFT", ed.dir_rangetext_yoffset, "RIGHT", 8, 0)
+      ed.dir_rangevalue_label:SetText(">=")
+      ed.dir_rangevalue = CreateFrame("EditBox", nil, ed)
+      ed.dir_rangevalue:SetWidth(30)
+      ed.dir_rangevalue:SetHeight(20)
+      ed.dir_rangevalue:SetPoint("LEFT", ed.dir_rangevalue_label, "RIGHT", 3, 0)
+      ed.dir_rangevalue:SetAutoFocus(false)
+      ed.dir_rangevalue:SetFontObject("GameFontHighlight")
+      sA:SkinFrame(ed.dir_rangevalue, {0.15,0.15,0.15,1})
+      ed.dir_rangevalue:SetScript("OnEscapePressed", function() ed.dir_rangevalue:ClearFocus() end)
+      ed.dir_rangevalue:SetScript("OnEnterPressed", function() sA:SaveAura(id); ed.dir_rangevalue:ClearFocus() end)
+      ed.dir_rangevalue:SetScript("OnEditFocusGained", function() ed.dir_rangevalue:SetBackdropColor(0.25,0.25,0.25,1) end)
+      ed.dir_rangevalue:SetScript("OnEditFocusLost", function() ed.dir_rangevalue:SetBackdropColor(0.15,0.15,0.15,1) end)
+      
+      -- Range color picker
+      ed.dir_rangecolorpicker = CreateFrame("Button", nil, ed)
+      ed.dir_rangecolorpicker:SetWidth(20)
+      ed.dir_rangecolorpicker:SetHeight(20)
+      ed.dir_rangecolorpicker:SetPoint("LEFT", ed.dir_rangevalue, "RIGHT", 5, 0)
+      sA:SkinFrame(ed.dir_rangecolorpicker, {1,1,1,1})
+      ed.dir_rangecolorpicker.r = 1
+      ed.dir_rangecolorpicker.g = 0
+      ed.dir_rangecolorpicker.b = 0
+      ed.dir_rangecolorpicker.a = 1
+      ed.dir_rangecolorpicker:SetScript("OnEnter", function() ed.dir_rangecolorpicker:SetBackdropBorderColor(0.5,0.5,0.5,1) end)
+      ed.dir_rangecolorpicker:SetScript("OnLeave", function() ed.dir_rangecolorpicker:SetBackdropBorderColor(0,0,0,1) end)
+      ed.dir_rangecolorpicker:SetScript("OnClick", function()
+        ColorPickerFrame:SetColorRGB(ed.dir_rangecolorpicker.r, ed.dir_rangecolorpicker.g, ed.dir_rangecolorpicker.b)
+        ColorPickerFrame.previousValues = {ed.dir_rangecolorpicker.r, ed.dir_rangecolorpicker.g, ed.dir_rangecolorpicker.b, ed.dir_rangecolorpicker.a}
+        ColorPickerFrame.func = function()
+          local r, g, b = ColorPickerFrame:GetColorRGB()
+          local a = OpacitySliderFrame:GetValue()
+          ed.dir_rangecolorpicker.r = r
+          ed.dir_rangecolorpicker.g = g
+          ed.dir_rangecolorpicker.b = b
+          ed.dir_rangecolorpicker.a = a
+          ed.dir_rangecolorpicker:SetBackdropColor(r, g, b, a)
+          sA:SaveAura(id)
+        end
+        ColorPickerFrame.cancelFunc = function(previousValues)
+          ed.dir_rangecolorpicker.r = previousValues[1]
+          ed.dir_rangecolorpicker.g = previousValues[2]
+          ed.dir_rangecolorpicker.b = previousValues[3]
+          ed.dir_rangecolorpicker.a = previousValues[4]
+          ed.dir_rangecolorpicker:SetBackdropColor(previousValues[1], previousValues[2], previousValues[3], previousValues[4])
+          sA:SaveAura(id)
+        end
+        ColorPickerFrame.hasOpacity = true
+        ColorPickerFrame.opacity = ed.dir_rangecolorpicker.a
+        ColorPickerFrame.opacityFunc = ColorPickerFrame.func
+        ColorPickerFrame:Show()
+      end)
+      ed.dir_rangecolor_label = ed:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      ed.dir_rangecolor_label:SetPoint("LEFT", ed.dir_rangecolorpicker, "RIGHT", 3, 0)
+      ed.dir_rangecolor_label:SetText("Color")
+      
       -- Hide directional checkboxes by default (they'll be shown when Dir is checked)
       ed.dir_left:Hide()
       ed.dir_left_label:Hide()
@@ -1357,6 +1601,22 @@ function sA:EditAura(id)
       ed.dir_rightright_label:Hide()
       ed.dir_rightrightright:Hide()
       ed.dir_rightrightright_label:Hide()
+      ed.dir_showrange:Hide()
+      ed.dir_showrange_label:Hide()
+      ed.dir_unit:Hide()
+      ed.dir_unit_label:Hide()
+      ed.dir_rangevalue:Hide()
+      ed.dir_rangevalue_label:Hide()
+      ed.dir_rangecolorpicker:Hide()
+      ed.dir_rangecolor_label:Hide()
+      ed.dir_rangetext_xoffset:Hide()
+      ed.dir_rangetext_xoffset_label:Hide()
+      ed.dir_rangetext_yoffset:Hide()
+      ed.dir_rangetext_yoffset_label:Hide()
+      ed.dir_minrange:Hide()
+      ed.dir_minrange_label:Hide()
+      ed.dir_maxrange:Hide()
+      ed.dir_maxrange_label:Hide()
     end
 
     -- Invert / Dual
@@ -1550,6 +1810,29 @@ function sA:EditAura(id)
     ed.dir_rightrightright.value = aura.dir_rightrightright or 0
     if ed.dir_rightrightright.value == 1 then ed.dir_rightrightright.checked:Show() else ed.dir_rightrightright.checked:Hide() end
     
+    -- Load range controls
+    ed.dir_showrange.value = aura.dir_showrange or 0
+    if ed.dir_showrange.value == 1 then ed.dir_showrange.checked:Show() else ed.dir_showrange.checked:Hide() end
+    ed.dir_unit.text:SetText(aura.dir_unit or "Target")
+    ed.dir_rangevalue:SetText(tostring(aura.dir_rangevalue or 0))
+    if aura.dir_rangecolor then
+      ed.dir_rangecolorpicker.r = aura.dir_rangecolor[1]
+      ed.dir_rangecolorpicker.g = aura.dir_rangecolor[2]
+      ed.dir_rangecolorpicker.b = aura.dir_rangecolor[3]
+      ed.dir_rangecolorpicker.a = aura.dir_rangecolor[4]
+      ed.dir_rangecolorpicker:SetBackdropColor(aura.dir_rangecolor[1], aura.dir_rangecolor[2], aura.dir_rangecolor[3], aura.dir_rangecolor[4])
+    else
+      ed.dir_rangecolorpicker.r = 1
+      ed.dir_rangecolorpicker.g = 0
+      ed.dir_rangecolorpicker.b = 0
+      ed.dir_rangecolorpicker.a = 1
+      ed.dir_rangecolorpicker:SetBackdropColor(1, 0, 0, 1)
+    end
+    ed.dir_rangetext_xoffset:SetText(tostring(aura.dir_rangetext_xoffset or 0))
+    ed.dir_rangetext_yoffset:SetText(tostring(aura.dir_rangetext_yoffset or 0))
+    ed.dir_minrange:SetText(tostring(aura.dir_minrange or 0))
+    ed.dir_maxrange:SetText(tostring(aura.dir_maxrange or 0))
+    
     -- Hide/show elements based on dir state
     if aura.dir == 1 then
       if ed.typeLabel then ed.typeLabel:Hide() end
@@ -1585,6 +1868,23 @@ function sA:EditAura(id)
       if ed.dir_rightright_label then ed.dir_rightright_label:Show() end
       if ed.dir_rightrightright then ed.dir_rightrightright:Show() end
       if ed.dir_rightrightright_label then ed.dir_rightrightright_label:Show() end
+      -- Show range controls when Dir is enabled
+      if ed.dir_showrange then ed.dir_showrange:Show() end
+      if ed.dir_showrange_label then ed.dir_showrange_label:Show() end
+      if ed.dir_unit then ed.dir_unit:Show() end
+      if ed.dir_unit_label then ed.dir_unit_label:Show() end
+      if ed.dir_rangevalue then ed.dir_rangevalue:Show() end
+      if ed.dir_rangevalue_label then ed.dir_rangevalue_label:Show() end
+      if ed.dir_rangecolorpicker then ed.dir_rangecolorpicker:Show() end
+      if ed.dir_rangecolor_label then ed.dir_rangecolor_label:Show() end
+      if ed.dir_rangetext_xoffset then ed.dir_rangetext_xoffset:Show() end
+      if ed.dir_rangetext_xoffset_label then ed.dir_rangetext_xoffset_label:Show() end
+      if ed.dir_rangetext_yoffset then ed.dir_rangetext_yoffset:Show() end
+      if ed.dir_rangetext_yoffset_label then ed.dir_rangetext_yoffset_label:Show() end
+      if ed.dir_minrange then ed.dir_minrange:Show() end
+      if ed.dir_minrange_label then ed.dir_minrange_label:Show() end
+      if ed.dir_maxrange then ed.dir_maxrange:Show() end
+      if ed.dir_maxrange_label then ed.dir_maxrange_label:Show() end
     end
   end
   

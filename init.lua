@@ -141,6 +141,7 @@ if sA.SuperWoW then
   local sADuration = CreateFrame("Frame")
   sADuration:RegisterEvent("RAW_COMBATLOG")
   sADuration:RegisterEvent("UNIT_CASTEVENT")
+  sADuration:RegisterEvent("UNIT_AURA")
   sADuration:SetScript("OnEvent", function()
     local timestamp = GetTime()
 
@@ -286,6 +287,111 @@ if sA.SuperWoW then
 		  
 	  end
 	  
+    elseif event == "UNIT_AURA" and simpleAuras.auradurations then
+      -- UNIT_AURA handler: Scan target for any debuffs cast by player
+      local unit = arg1
+      if not unit or (unit ~= "target" and unit ~= "player") then return end
+      
+
+      
+      local unitGUID = sA:GetUnitGUID(unit)
+      if not unitGUID then 
+        return 
+      end
+      
+      -- Ensure we have playerGUID
+      if not sA.playerGUID then
+        sA.playerGUID = sA:GetUnitGUID("player")
+      end
+      
+
+      
+      local foundCount = 0
+      local myDebuffCount = 0
+      
+      -- Scan all debuffs on this unit
+      for i = 1, 64 do
+        local tex, stacks, caster, sid, rem
+        tex, stacks, caster, sid, rem = UnitDebuff(unit, i)
+        
+        if not tex then break end
+        
+        foundCount = foundCount + 1
+        
+        if sid and caster then
+          -- Normalize caster GUID
+          local normalizedCaster = tostring(caster)
+          if type(normalizedCaster) == "string" then
+            normalizedCaster = string.gsub(normalizedCaster, "^0x", "")
+          end
+          
+          -- Only track debuffs cast by the player
+          if normalizedCaster == sA.playerGUID then
+            myDebuffCount = myDebuffCount + 1
+            local dur = GetAuraDurationBySpellID(sid, normalizedCaster)
+            local spellName = SpellInfo(sid) or "unknown"
+            
+            if sA.debugMode and spellName and string.find(spellName, "Judgement") then
+              sA:Msg("[DEBUG] UNIT_AURA: Found MY debuff - spellID=" .. sid .. " (" .. spellName .. "), dur=" .. tostring(dur))
+            end
+            
+            if dur and dur > 0 then
+              sA.auraTimers[unitGUID] = sA.auraTimers[unitGUID] or {}
+              sA.auraTimers[unitGUID][sid] = sA.auraTimers[unitGUID][sid] or {}
+              
+              local expiry = timestamp + dur
+              -- Update if we don't have a duration or if this one is newer
+              if not sA.auraTimers[unitGUID][sid].duration or expiry > sA.auraTimers[unitGUID][sid].duration then
+                sA.auraTimers[unitGUID][sid].duration = expiry
+                sA.auraTimers[unitGUID][sid].castby = normalizedCaster
+              end
+            end
+          end
+        end
+      end
+      
+      -- Also scan buffs on this unit (for friendly targets)
+      for i = 1, 64 do
+        local tex, stacks, caster, sid, rem
+        tex, stacks, caster, sid, rem = UnitBuff(unit, i)
+        
+        if not tex then break end
+        
+        foundCount = foundCount + 1
+        
+        if sid and caster then
+          -- Normalize caster GUID
+          local normalizedCaster = tostring(caster)
+          if type(normalizedCaster) == "string" then
+            normalizedCaster = string.gsub(normalizedCaster, "^0x", "")
+          end
+          
+          -- Only track buffs cast by the player
+          if normalizedCaster == sA.playerGUID then
+            myDebuffCount = myDebuffCount + 1
+            local dur = GetAuraDurationBySpellID(sid, normalizedCaster)
+            local spellName = SpellInfo(sid) or "unknown"
+            
+            if sA.debugMode and spellName and string.find(spellName, "Judgement") then
+              sA:Msg("[DEBUG] UNIT_AURA: Found MY buff - spellID=" .. sid .. " (" .. spellName .. "), dur=" .. tostring(dur))
+            end
+            
+            if dur and dur > 0 then
+              sA.auraTimers[unitGUID] = sA.auraTimers[unitGUID] or {}
+              sA.auraTimers[unitGUID][sid] = sA.auraTimers[unitGUID][sid] or {}
+              
+              local expiry = timestamp + dur
+              -- Update if we don't have a duration or if this one is newer
+              if not sA.auraTimers[unitGUID][sid].duration or expiry > sA.auraTimers[unitGUID][sid].duration then
+                sA.auraTimers[unitGUID][sid].duration = expiry
+                sA.auraTimers[unitGUID][sid].castby = normalizedCaster
+              end
+            end
+          end
+        end
+      end
+      
+
     end
   end)
 end
